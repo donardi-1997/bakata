@@ -110,11 +110,7 @@ function bakata_render_home_collections(): string {
         <?php foreach ($themes as $slug => [$title, $description]) :
             if (!isset($items[$slug])) { continue; }
         ?>
-          <li><a class="bk-collection-card" href="<?php echo esc_url($items[$slug]); ?>">
-            <h3 class="bk-heading"><?php echo esc_html($title); ?></h3>
-            <p><?php echo esc_html($description); ?></p>
-            <span aria-hidden="true"><?php esc_html_e('Descubrir colección', 'bakata'); ?> &#8594;</span>
-          </a></li>
+          <li><a class="bk-collection-card" href="<?php echo esc_url($items[$slug]); ?>"><span class="bk-heading bk-collection-title"><?php echo esc_html($title); ?></span><span class="bk-collection-description"><?php echo esc_html($description); ?></span><span class="bk-collection-action" aria-hidden="true"><?php esc_html_e('Descubrir colección', 'bakata'); ?> &#8594;</span></a></li>
         <?php endforeach; ?>
       </ul>
     </section>
