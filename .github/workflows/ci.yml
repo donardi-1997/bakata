@@ -129,6 +129,18 @@ jobs:
           docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 cli wp eval "$(tail -n +2 scripts/checkout-fixtures-ci.php)"
           node --check qa/checkout.mjs
           node qa/checkout.mjs
+      - name: Browser QA — customer account and order isolation
+        env:
+          BAKATA_CI_FIXTURES: '1'
+        run: |
+          php -l scripts/account-fixtures-ci.php
+          export BAKATA_CI_ACCOUNT_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::$BAKATA_CI_ACCOUNT_PASSWORD"
+          fixture="$(docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 -e BAKATA_CI_ACCOUNT_PASSWORD cli wp eval "$(tail -n +2 scripts/account-fixtures-ci.php)")"
+          export BAKATA_CI_OWN_ORDER="$(printf '%s\n' "$fixture" | sed -n 's/^BAKATA_CI_OWN_ORDER=\([0-9]*\)$/\1/p')"
+          export BAKATA_CI_OTHER_ORDER="$(printf '%s\n' "$fixture" | sed -n 's/^BAKATA_CI_OTHER_ORDER=\([0-9]*\)$/\1/p')"
+          node --check qa/account.mjs
+          node qa/account.mjs
       - name: Lighthouse diagnostic report
         if: success()
         continue-on-error: true
