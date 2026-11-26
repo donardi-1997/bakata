@@ -27,3 +27,14 @@
 @media (max-width: 22rem) { .bk-category-grid { grid-template-columns: 1fr; } }
 @media (min-width: 48rem) { .bk-category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (min-width: 64rem) { .bk-category-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+
+/* Editorial category cards and consistent product rows on the landing. */
+.bk-home .bk-category-grid { gap:clamp(.75rem,2vw,1.25rem); }
+.bk-home .bk-catalog-category { box-sizing:border-box; border-radius:1rem; padding:.65rem; text-align:center; overflow-wrap:anywhere; }
+.bk-home .bk-category-media { background:#E9E1D3; border-radius:.75rem; }
+.bk-home .bk-product-card { border-radius:1rem; }
+.bk-home .bk-product-card .bk-card__body { display:flex; flex-direction:column; align-items:stretch; }
+.bk-home .bk-product-card .bk-card__body > :last-child { margin-top:auto; align-self:stretch; }
+.bk-home .bk-product-title { overflow-wrap:anywhere; }
+.bk-home .bk-product-card .bk-button { min-height:44px; }
+.bk-home .bk-recent .bk-section-heading { border-top:1px solid #E9E1D3; padding-top:clamp(1rem,3vw,2rem); }
