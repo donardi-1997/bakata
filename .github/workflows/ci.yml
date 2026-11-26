@@ -45,7 +45,7 @@ jobs:
           docker compose run --rm -T cli wp plugin is-active bakata-core
           docker compose run --rm -T cli wp theme is-active bakata
           curl --fail --silent --show-error --retry 5 http://localhost:8080/ -o /tmp/bakata-home.html
-          grep -F 'Descubre. Simplifica. Disfruta.' /tmp/bakata-home.html
+          grep -F 'Pequeños hallazgos. Grandes días.' /tmp/bakata-home.html
           grep -F 'design-system.css' /tmp/bakata-home.html
           grep -F 'bk-store-header' /tmp/bakata-home.html
           grep -F 'logo-horizontal.svg' /tmp/bakata-home.html
@@ -82,8 +82,13 @@ jobs:
           grep -F 'CI Featured Catalog Only' /tmp/bakata-catalog.html
           grep -F 'name="add-to-cart"' /tmp/bakata-catalog.html
           grep -F 'woocommerce-Price-amount' /tmp/bakata-catalog.html
-          test "$(grep -o 'class="bk-card bk-product-card"' /tmp/bakata-catalog.html | wc -l)" -eq 2
-          if grep -Eq 'CI Featured Hidden|CI Featured Search Only|CI Featured Draft|CI Not Featured' /tmp/bakata-catalog.html; then
+          test "$(grep -o 'class="bk-card bk-product-card"' /tmp/bakata-catalog.html | wc -l)" -eq 3
+          grep -F 'class="bk-catalog-section bk-recent"' /tmp/bakata-catalog.html
+          grep -F 'CI Not Featured' /tmp/bakata-catalog.html
+          if grep -Fq 'class="bk-catalog-section bk-recent"' /tmp/bakata-home.html; then
+            echo 'Empty recent section exposed'; exit 1
+          fi
+          if grep -Eq 'CI Featured Hidden|CI Featured Search Only|CI Featured Draft' /tmp/bakata-catalog.html; then
             echo 'Non-catalog product leaked'; exit 1
           fi
       - name: Verify footer and service links
