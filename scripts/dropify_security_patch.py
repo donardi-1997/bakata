@@ -16,6 +16,8 @@ def patch_security(name, source):
             source, count = re.subn(pattern, lambda _: replacement, source)
             if count != 1:
                 raise ValueError("Unexpected token lookup: " + field)
+        source = one(source, '$wpdb->insert($this->table_name, array(', 'return $wpdb->insert($this->table_name, array(')
+        source = one(source, '$listProducts[$i]->store = $store;', "$listProducts[$i]->store = (object) array('id' => $store->id, 'store' => $store->store);")
         source = one(source, '$token = $this->getTokenById($id)[0]->token;', '''$rows = $this->getTokenById($id);
         if (empty($rows)) {
             return false;
@@ -51,13 +53,15 @@ def patch_security(name, source):
             check_admin_referer('bakata_dropi_add_token');
             $token = isset($_POST['bakata_token']) && is_string($_POST['bakata_token']) ? wp_unslash($_POST['bakata_token']) : '';
             $store = isset($_POST['bakata_store']) && is_string($_POST['bakata_store']) ? sanitize_text_field(wp_unslash($_POST['bakata_store'])) : '';
-            if ($token === '' || strlen($token) > 4096 || preg_match('/[\\x00-\\x20\\x7f]/', $token)
+            if ($token === '' || strlen($token) > 1000 || preg_match('/[\\x00-\\x20\\x7f]/', $token)
                 || $store === '' || strlen($store) > 190) {
                 wp_die('Invalid token or store', '', array('response' => 400));
             }
             if (empty($this->SettingsInstance->does_token_exist($token))) {
                 $constants = JPIODFW_Constants::GetInstance();
-                $this->SettingsInstance->setNewToken($token, $store, $constants->SINC_MANUAL, 0);
+                if ($this->SettingsInstance->setNewToken($token, $store, $constants->SINC_MANUAL, 0) !== 1) {
+                    wp_die('Token could not be stored', '', array('response' => 500));
+                }
             }
             wp_safe_redirect(admin_url('admin.php?page=dropi-settings'));
             exit;
