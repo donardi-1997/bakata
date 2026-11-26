@@ -20,6 +20,7 @@ add_action('enqueue_block_assets', static function (): void {
         'bakata-header' => 'assets/css/header.css',
         'bakata-hero' => 'assets/css/hero.css',
         'bakata-catalog' => 'assets/css/catalog.css',
+        'bakata-footer' => 'assets/css/footer.css',
     ];
     foreach ($assets as $handle => $relative) {
         $path = get_theme_file_path($relative);
@@ -31,7 +32,7 @@ add_action('enqueue_block_assets', static function (): void {
             get_theme_file_uri($relative),
             match ($handle) {
                 'bakata-design-system' => ['bakata-brand-tokens', 'bakata-fonts'],
-                'bakata-header', 'bakata-hero', 'bakata-catalog' => ['bakata-design-system'],
+                'bakata-header', 'bakata-hero', 'bakata-catalog', 'bakata-footer' => ['bakata-design-system'],
                 default => [],
             },
             (string) filemtime($path)
@@ -44,3 +45,5 @@ require_once get_theme_file_path('inc/store-header.php');
 require_once get_theme_file_path('inc/store-hero.php');
 
 require_once get_theme_file_path('inc/store-catalog.php');
+
+require_once get_theme_file_path('inc/store-footer.php');
