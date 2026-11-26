@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bakatá Core
  * Description: Base modular para la operación comercial de Bakatá Store.
- * Version: 0.1.0
+ * Version: 0.2.0
  * Requires at least: 6.6
  * Requires PHP: 8.3
  * Author: Bakatá
@@ -14,6 +14,9 @@ declare(strict_types=1);
 namespace Bakata\Core;
 
 defined('ABSPATH') || exit;
+
+require_once __DIR__ . '/src/Suppliers/Contracts.php';
+require_once __DIR__ . '/src/Suppliers/CatalogPreview.php';
 
 add_action('before_woocommerce_init', static function (): void {
     if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
@@ -37,6 +40,6 @@ add_action('plugins_loaded', static function (): void {
         return;
     }
 
-    // Punto de extensión para módulos futuros; sin operaciones externas.
+    // Contratos de proveedores disponibles; ningún adaptador comercial registrado.
     do_action('bakata_core_ready');
 });
