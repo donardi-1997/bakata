@@ -5,6 +5,9 @@ defined('ABSPATH') || exit;
 
 add_action('after_setup_theme', static function (): void {
     add_theme_support('woocommerce');
+    add_theme_support('wc-product-gallery-zoom');
+    add_theme_support('wc-product-gallery-slider');
+    add_theme_support('wc-product-gallery-lightbox');
     add_theme_support('wp-block-styles');
 });
 
@@ -22,6 +25,7 @@ add_action('enqueue_block_assets', static function (): void {
         'bakata-catalog' => 'assets/css/catalog.css',
         'bakata-footer' => 'assets/css/footer.css',
         'bakata-shop' => 'assets/css/shop.css',
+        'bakata-product' => 'assets/css/product.css',
     ];
     foreach ($assets as $handle => $relative) {
         $path = get_theme_file_path($relative);
@@ -33,7 +37,7 @@ add_action('enqueue_block_assets', static function (): void {
             get_theme_file_uri($relative),
             match ($handle) {
                 'bakata-design-system' => ['bakata-brand-tokens', 'bakata-fonts'],
-                'bakata-header', 'bakata-hero', 'bakata-catalog', 'bakata-footer', 'bakata-shop' => ['bakata-design-system'],
+                'bakata-header', 'bakata-hero', 'bakata-catalog', 'bakata-footer', 'bakata-shop', 'bakata-product' => ['bakata-design-system'],
                 default => [],
             },
             (string) filemtime($path)
@@ -50,3 +54,5 @@ require_once get_theme_file_path('inc/store-catalog.php');
 require_once get_theme_file_path('inc/store-footer.php');
 
 require_once get_theme_file_path('inc/store-shop.php');
+
+require_once get_theme_file_path('inc/store-product.php');
