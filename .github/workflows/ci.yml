@@ -184,6 +184,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/verify-dropify.py
           docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-dropify-token-vault.php
+          docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-dropify-credential-migration.php
       - name: Dropify reservation — concurrent isolated MariaDB claimants
         run: |
           docker compose run --rm -T --no-deps -e BAKATA_CI_FIXTURES=1 -v "$PWD:/bakata-ci:ro" --entrypoint sh cli /bakata-ci/scripts/test-dropify-reservation-ci.sh
