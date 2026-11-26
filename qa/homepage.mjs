@@ -52,7 +52,18 @@ async function checkLayout(width) {
       await visible(page.locator(selector), selector);
     }
     assert.equal(await page.locator('main h1').count(), 1, 'One main H1 required');
-    assert.equal(await page.locator('.bk-product-card').count(), mode === 'empty' ? 0 : 2);
+    assert.equal(await page.locator('.bk-featured .bk-product-card').count(), mode === 'empty' ? 0 : 2);
+    assert.equal(await page.locator('.bk-recent').count(), mode === 'empty' ? 0 : 1);
+    assert.equal(await page.locator('.bk-recent .bk-product-card').count(), mode === 'empty' ? 0 : 1);
+    if (mode === 'populated') {
+      assert.equal(await page.locator('.bk-recent .bk-product-title').innerText(), 'CI Not Featured');
+      assert.equal(await page.locator('.bk-featured .bk-product-title').filter({hasText:'CI Not Featured'}).count(), 0);
+      const ids = await page.locator('.bk-product-card').evaluateAll(cards => cards.map(card => card.dataset.productId));
+      assert.equal(new Set(ids).size, ids.length, 'Duplicate homepage products');
+      for (const name of ['CI Featured Hidden', 'CI Featured Search Only', 'CI Featured Draft']) {
+        assert.equal(await page.locator('.bk-product-title').filter({hasText:name}).count(), 0, 'Non-catalog product leaked: ' + name);
+      }
+    }
     assert.equal(await page.locator('.bk-catalog-empty').count(), mode === 'empty' ? 2 : 0);
     await page.locator('.bk-store-footer').scrollIntoViewIfNeeded();
     await page.locator('.bk-hero').scrollIntoViewIfNeeded();
