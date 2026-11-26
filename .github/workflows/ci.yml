@@ -18,6 +18,8 @@ jobs:
         run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-supplier-foundation.php
       - name: Pricing preview — isolated unit economics tests
         run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-pricing-preview.php
+      - name: Inventory preview — isolated reconciliation tests
+        run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-inventory-preview.php
       - name: Validate theme JSON and shell
         run: |
           python3 -m json.tool wp-content/themes/bakata/theme.json > /dev/null
