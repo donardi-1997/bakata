@@ -50,3 +50,22 @@
 .bk-home .bk-product-card .bk-card__media { border-radius:var(--bk-radius-sm); background:var(--bk-background); }
 .bk-home .bk-product-card .bk-price { font-size:clamp(1rem,2vw,1.25rem); font-variant-numeric:tabular-nums; }
 .bk-product-offer { align-self:flex-start; display:inline-block; border-radius:var(--bk-radius-pill); padding:.2rem .65rem; background:var(--bk-primary); color:var(--bk-on-primary); font-size:var(--bk-size-small); font-weight:600; }
+
+/* Editorial collection cards use brand surfaces, with no remote image dependencies. */
+.bk-collection-grid { display:grid; grid-template-columns:minmax(0,1fr); gap:var(--bk-space-4); list-style:none; padding:4px; margin:0; }
+.bk-collection-grid li { min-width:0; }
+.bk-collection-card { box-sizing:border-box; display:flex; flex-direction:column; align-items:flex-start; justify-content:space-between; gap:1rem; min-height:15rem; height:100%; padding:clamp(1.25rem,3vw,2rem); border-radius:var(--bk-radius-lg); background:var(--bk-surface-muted); color:var(--bk-primary); text-decoration:none; overflow-wrap:anywhere; }
+.bk-collection-card:visited { color:var(--bk-primary); }
+.bk-collection-title { color:inherit; font-size:clamp(1.35rem,2.5vw,2rem); margin:0; }
+.bk-collection-description { margin:0; }
+.bk-collection-action { font-weight:600; text-decoration:underline; text-underline-offset:.2em; }
+.bk-collection-card:focus-visible { outline:2px solid var(--bk-focus); outline-offset:2px; }
+@media(min-width:48rem) { .bk-collection-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr)); } }
+@media(min-width:64rem) {
+ .bk-home .bk-category-grid { grid-template-columns:repeat(4,minmax(0,1fr)); align-items:stretch; }
+ .bk-home .bk-category-grid > li:first-child { grid-column:span 2; grid-row:span 2; }
+ .bk-home .bk-category-grid > li:first-child .bk-category-media { aspect-ratio:auto; min-height:0; height:100%; }
+ .bk-home .bk-category-grid > li:first-child .bk-catalog-category { grid-template-rows:minmax(0,1fr) auto; }
+ .bk-home .bk-category-grid > li:only-child { grid-column:1/-1; grid-row:auto; }
+ .bk-home .bk-category-grid > li:only-child .bk-category-media { aspect-ratio: 16 / 5; height:auto; }
+}
