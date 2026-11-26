@@ -49,6 +49,23 @@ jobs:
           test "$(git hash-object /tmp/bakata-inter.woff2)" = '5a8d3e72ad7ffb62af3b146e1b1f54ab5813a212'
           curl --fail --silent --show-error http://localhost:8080/wp-content/themes/bakata/assets/css/design-system.css -o /tmp/bakata-design-system.css
           grep -F -- '--bk-primary: #1F3A37' /tmp/bakata-design-system.css
+      - name: Verify empty and populated homepage catalog
+        run: |
+          grep -F 'class="bk-catalog-section bk-categories"' /tmp/bakata-home.html
+          grep -F 'class="bk-catalog-section bk-featured"' /tmp/bakata-home.html
+          test "$(grep -o 'class="bk-catalog-empty"' /tmp/bakata-home.html | wc -l)" -eq 2
+          php -l scripts/catalog-fixtures-ci.php
+          docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 cli wp eval "$(tail -n +2 scripts/catalog-fixtures-ci.php)"
+          curl --fail --silent --show-error http://localhost:8080/ -o /tmp/bakata-catalog.html
+          grep -F 'CI Category Alpha' /tmp/bakata-catalog.html
+          grep -F 'CI Featured Visible' /tmp/bakata-catalog.html
+          grep -F 'CI Featured Catalog Only' /tmp/bakata-catalog.html
+          grep -F 'name="add-to-cart"' /tmp/bakata-catalog.html
+          grep -F 'woocommerce-Price-amount' /tmp/bakata-catalog.html
+          test "$(grep -o 'class="bk-card bk-product-card"' /tmp/bakata-catalog.html | wc -l)" -eq 2
+          if grep -Eq 'CI Featured Hidden|CI Featured Search Only|CI Featured Draft|CI Not Featured' /tmp/bakata-catalog.html; then
+            echo 'Non-catalog product leaked'; exit 1
+          fi
       - name: Diagnostic logs
         if: failure()
         run: docker compose logs --tail=100
