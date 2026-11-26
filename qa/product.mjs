@@ -74,10 +74,39 @@ async function buy(slug,name,variable=false) {
     if(variable) {
       const select=form.locator('select[name=attribute_color]');
       await select.waitFor({state:'visible'});
-      assert(await button.evaluate(el=>el.classList.contains('disabled')||el.disabled),'Variation initially not selected');
-      await select.selectOption({label:'Verde'});
-      await page.waitForFunction(()=>Number(document.querySelector('input[name=variation_id]')?.value)>0&&!document.querySelector('.single_add_to_cart_button')?.classList.contains('disabled'));
-      expectedId=Number(await form.locator('input[name=variation_id]').inputValue());
+      // WooCommerce initializes asynchronously after its gallery. Observe the
+      // actual selection-needed state rather than inspecting the initial HTML.
+      const waitUnselected = async () => {
+        await page.waitForFunction(() => {
+          const f=document.querySelector('.summary .variations_form');
+          const b=f?.querySelector('.single_add_to_cart_button');
+          const wrap=f?.querySelector('.woocommerce-variation-add-to-cart');
+          return !!b && b.classList.contains('wc-variation-selection-needed')
+            && b.classList.contains('disabled')
+            && wrap?.classList.contains('woocommerce-variation-add-to-cart-disabled')
+            && Number(f.querySelector('input[name=variation_id]')?.value)===0;
+        }, undefined, {timeout:10000});
+        assert.equal(await select.inputValue(),'','No initial variation selection');
+        assert.equal(Number(await form.locator('input[name=variation_id]').inputValue()),0);
+      };
+      const selectAvailable = async () => {
+        await select.selectOption({label:'Verde'});
+        await page.waitForFunction(() => {
+          const f=document.querySelector('.summary .variations_form');
+          const b=f?.querySelector('.single_add_to_cart_button');
+          return !!b && !b.disabled && !b.classList.contains('disabled')
+            && f.querySelector('.woocommerce-variation-add-to-cart')?.classList.contains('woocommerce-variation-add-to-cart-enabled')
+            && Number(f.querySelector('input[name=variation_id]')?.value)>0;
+        }, undefined, {timeout:10000});
+        return Number(await form.locator('input[name=variation_id]').inputValue());
+      };
+      await waitUnselected();
+      const firstId=await selectAvailable();
+      // Clearing the attribute must disable buying again, without stale IDs.
+      await select.selectOption('');
+      await waitUnselected();
+      expectedId=await selectAvailable();
+      assert.equal(expectedId,firstId,'Reselection resolves the same variation');
     } else {
       expectedId=Number(await form.locator('[name=add-to-cart]').getAttribute('value'));
       assert(await page.locator('.summary .price del').isVisible(),'Regular price shown with sale');
@@ -98,7 +127,12 @@ async function buy(slug,name,variable=false) {
     if(variable) assert(item.variation.some(v=>String(v.value).toLowerCase()==='verde'),'Selected variation missing');
     results.push({slug,purchase:'passed',quantity:item.quantity,variation:variable});
   } catch(error) {
-    failures.push({slug,purchase:String(error),url:page.url()});
+    failures.push({slug,purchase:String(error),url:page.url(),variationState:await page.evaluate(()=>{
+      const f=document.querySelector('.summary .variations_form');
+      if(!f)return null;
+      const b=f.querySelector('.single_add_to_cart_button');
+      return {value:f.querySelector('select[name=attribute_color]')?.value,id:f.querySelector('input[name=variation_id]')?.value,buttonClass:b?.className,disabled:b?.disabled,wrapperClass:f.querySelector('.woocommerce-variation-add-to-cart')?.className};
+    }).catch(()=>null)});
     await page.screenshot({path:out('failure-buy-'+slug+'.png'),fullPage:true}).catch(()=>{});
   } finally { await context.close(); }
 }
