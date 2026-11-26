@@ -38,8 +38,17 @@ async function audit(page,label) {
   await page.evaluate(()=>document.fonts.ready);
   assert.equal(await page.getByRole('main').count(),1,'One main landmark');
   assert.equal(await page.locator('main h1').count(),1,'One H1');
-  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
-  assert(overflow<=1,'Horizontal overflow: '+overflow);
+  const layout=await page.evaluate(()=>{
+    const width=document.documentElement.clientWidth;
+    const scrollWidth=document.documentElement.scrollWidth;
+    const offenders=Array.from(document.querySelectorAll('main.bk-cart, main.bk-cart *'))
+      .filter(el=>{const r=el.getBoundingClientRect();const s=getComputedStyle(el);return r.width>1&&r.height>1&&s.visibility!=='hidden'&&s.display!=='none'&&r.right>width+1&&r.left>=0;})
+      .map(el=>{const r=el.getBoundingClientRect();const s=getComputedStyle(el);return {tag:el.tagName,className:typeof el.className==='string'?el.className:el.getAttribute('class'),left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),scrollWidth:el.scrollWidth,display:s.display,grid:s.gridTemplateColumns,whiteSpace:s.whiteSpace};})
+      .sort((a,b)=>b.right-a.right).slice(0,20);
+    return {width,scrollWidth,overflow:scrollWidth-width,offenders};
+  });
+  await writeFile(out('layout-'+label+'.json'),JSON.stringify(layout,null,2));
+  assert(layout.overflow<=1,'Horizontal overflow: '+layout.overflow+'; elements: '+JSON.stringify(layout.offenders));
   await page.screenshot({path:out(label+'.png'),fullPage:true});
   await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
   const axe=await page.evaluate(tags=>window.axe.run(document,{runOnly:{type:'tag',values:tags}}),tags);

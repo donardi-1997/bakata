@@ -38,3 +38,71 @@
   .bk-cart .wc-block-components-sidebar { padding-inline: .75rem; }
   .bk-cart .wc-block-components-totals-coupon__form .wc-block-components-text-input, .bk-cart .wc-block-components-totals-coupon__button { flex-basis: 100%; }
 }
+
+/* Reflow rather than clipping on narrow handsets. WC's small-container row
+ * uses fixed tracks plus an implicit third track; give all cells a bounded
+ * layout and let the quantity controls and coupon labels wrap. */
+@media (max-width: 35rem) {
+  .bk-cart .wc-block-components-sidebar-layout,
+  .bk-cart .wc-block-components-main,
+  .bk-cart .wc-block-components-sidebar,
+  .bk-cart .wc-block-cart-content,
+  .bk-cart .wp-block-woocommerce-cart,
+  .bk-cart .wc-block-cart__main,
+  .bk-cart .wp-block-woocommerce-cart-order-summary-block {
+    min-width: 0; max-width: 100%; box-sizing: border-box;
+  }
+  .bk-cart table.wc-block-cart-items {
+    table-layout: fixed; width: 100%; max-width: 100%; min-width: 0;
+  }
+  .bk-cart .wc-block-cart table.wc-block-cart-items .wc-block-cart-items__row {
+    display: grid; grid-template-columns: minmax(0,60px) minmax(0,1fr);
+    column-gap: .75rem; row-gap: .5rem; width: 100%;
+    min-width: 0; box-sizing: border-box;
+  }
+  .bk-cart .wc-block-cart table.wc-block-cart-items .wc-block-cart-items__row > td {
+    min-width: 0; max-width: 100%; box-sizing: border-box;
+  }
+  .bk-cart .wc-block-cart table.wc-block-cart-items .wc-block-cart-item__image {
+    grid-column: 1; grid-row: 1; align-self: start;
+  }
+  .bk-cart .wc-block-cart table.wc-block-cart-items .wc-block-cart-item__product {
+    grid-column: 2; grid-row: 1; padding: 0;
+  }
+  .bk-cart .wc-block-cart table.wc-block-cart-items .wc-block-cart-item__total {
+    grid-column: 2; grid-row: 2; justify-self: stretch;
+  }
+  .bk-cart .wc-block-cart-item__wrap,
+  .bk-cart .wc-block-cart-item__quantity,
+  .bk-cart .wc-block-cart-item__prices {
+    min-width: 0; max-width: 100%; box-sizing: border-box;
+  }
+  .bk-cart .wc-block-cart table.wc-block-cart-items .wc-block-cart-item__quantity {
+    flex-wrap: wrap; gap: .5rem;
+  }
+  .bk-cart .wc-block-cart-item__wrap .wc-block-components-product-name {
+    max-width: 100%; overflow-wrap: anywhere;
+  }
+  .bk-cart .wc-block-components-quantity-selector {
+    flex: 0 1 132px; min-width: 0; max-width: 100%;
+  }
+  .bk-cart .wc-block-components-quantity-selector__input { flex: 1 1 0; width: 0; }
+  .bk-cart .wc-block-components-quantity-selector__button { flex: 0 0 36px; }
+  .bk-cart .wc-block-components-totals-item,
+  .bk-cart .wc-block-components-totals-item__description,
+  .bk-cart .wc-block-components-totals-discount__coupon-list,
+  .bk-cart .wc-block-components-totals-discount__coupon-list-item {
+    min-width: 0; max-width: 100%; box-sizing: border-box;
+  }
+  .bk-cart .wc-block-components-totals-discount__coupon-list-item {
+    white-space: normal; overflow-wrap: anywhere; margin-inline-end: 0;
+  }
+  .bk-cart .wc-block-components-chip__text {
+    min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.4;
+  }
+  .bk-cart .wc-block-components-chip__remove { flex-shrink: 0; }
+  .bk-cart .wc-block-components-totals-item__label,
+  .bk-cart .wc-block-components-totals-item__value {
+    min-width: 0; overflow-wrap: anywhere;
+  }
+}
