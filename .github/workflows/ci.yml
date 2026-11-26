@@ -45,7 +45,7 @@ jobs:
           docker compose run --rm -T cli wp plugin is-active bakata-core
           docker compose run --rm -T cli wp theme is-active bakata
           curl --fail --silent --show-error --retry 5 http://localhost:8080/ -o /tmp/bakata-home.html
-          grep -F 'Pequeños hallazgos. Grandes días.' /tmp/bakata-home.html
+          grep -F 'Pequeños cambios. Grandes días.' /tmp/bakata-home.html
           grep -F 'design-system.css' /tmp/bakata-home.html
           grep -F 'bk-store-header' /tmp/bakata-home.html
           grep -F 'logo-horizontal.svg' /tmp/bakata-home.html

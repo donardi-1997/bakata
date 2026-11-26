@@ -52,6 +52,16 @@ async function checkLayout(width) {
       await visible(page.locator(selector), selector);
     }
     assert.equal(await page.locator('main h1').count(), 1, 'One main H1 required');
+    assert.equal(await page.locator('main h1').innerText(), 'Pequeños cambios. Grandes días.');
+    const categoryCards = page.locator('.bk-category-grid a');
+    assert(await categoryCards.count() <= 9, 'Homepage category limit exceeded');
+    for (const href of await categoryCards.evaluateAll(links => links.map(link => link.href))) {
+      assert.equal(new URL(href).origin, base.origin, 'Category link must be local');
+    }
+    if (await categoryCards.count()) {
+      assert(await page.locator('.bk-category-nav a').count() > 0, 'Desktop category navigation missing');
+      assert.equal(await page.locator('.bk-category-nav').isVisible(), width >= 1024);
+    }
     assert.equal(await page.locator('.bk-featured .bk-product-card').count(), mode === 'empty' ? 0 : 2);
     assert.equal(await page.locator('.bk-recent').count(), mode === 'empty' ? 0 : 1);
     assert.equal(await page.locator('.bk-recent .bk-product-card').count(), mode === 'empty' ? 0 : 1);
