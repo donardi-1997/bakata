@@ -65,3 +65,33 @@ require_once get_theme_file_path('inc/store-cart.php');
 require_once get_theme_file_path('inc/store-checkout.php');
 
 require_once get_theme_file_path('inc/store-account.php');
+
+/** Prioritize only the local body font on the editorial landing page. */
+add_filter('wp_preload_resources', static function (array $resources): array {
+    if (!is_front_page() || !is_file(get_theme_file_path('assets/fonts/inter.woff2'))) {
+        return $resources;
+    }
+    $url = get_theme_file_uri('assets/fonts/inter.woff2');
+    foreach ($resources as $resource) {
+        if (($resource['href'] ?? '') === $url) {
+            return $resources;
+        }
+    }
+    $resources[] = ['href' => $url, 'as' => 'font', 'type' => 'font/woff2', 'crossorigin' => 'anonymous'];
+    return $resources;
+});
+
+/** Keep transactional and internal search pages out of search indexes.
+ * Preserve WordPress and plugin directives; do not override site-wide visibility.
+ * Robots directives are not an access-control mechanism.
+ */
+add_filter('wp_robots', static function (array $robots): array {
+    if (is_search()
+        || (function_exists('is_cart') && is_cart())
+        || (function_exists('is_checkout') && is_checkout())
+        || (function_exists('is_account_page') && is_account_page())) {
+        $robots['noindex'] = true;
+        unset($robots['index']);
+    }
+    return $robots;
+}, 20);
