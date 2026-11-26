@@ -140,7 +140,7 @@ function bakata_render_featured_products(): string {
                 <?php if ($can_add) : ?>
                   <form method="post" action="<?php echo esc_url(wc_get_cart_url()); ?>" class="bk-product-action">
                     <input type="hidden" name="add-to-cart" value="<?php echo esc_attr((string) $product->get_id()); ?>">
-                    <button type="submit" class="bk-button" aria-label="<?php echo esc_attr(sprintf(__('Añadir %s al carrito', 'bakata'), $product->get_name())); ?>"><?php esc_html_e('Añadir al carrito', 'bakata'); ?></button>
+                    <button type="submit" class="bk-button" aria-label="<?php echo esc_attr(sprintf(__('Añadir al carrito: %s', 'bakata'), $product->get_name())); ?>"><?php esc_html_e('Añadir al carrito', 'bakata'); ?></button>
                   </form>
                 <?php else : ?>
                   <a class="bk-button bk-button--secondary" href="<?php echo esc_url($url); ?>" aria-label="<?php echo esc_attr(sprintf(__('Ver detalles de %s', 'bakata'), $product->get_name())); ?>"><?php esc_html_e('Ver detalles', 'bakata'); ?></a>

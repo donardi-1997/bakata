@@ -117,20 +117,52 @@ async function checkShopping() {
     const shopResponse = await page.goto(shopUrl.href, {waitUntil:'load'});
     assert(shopResponse?.ok(), 'Shop link failed');
     await openHome(page);
+    const productLink = page.locator('.bk-product-title a').filter({hasText:'CI Featured Visible'});
+    const productUrl = new URL(await productLink.getAttribute('href'), base);
+    assert.equal(productUrl.origin, base.origin);
     const search = page.locator('.bk-header-search input[type=search]');
-    await search.fill('CI Featured Visible');
+    // Multiple matches must remain a product search; catalog-only and hidden products must not leak.
+    await search.fill('CI Featured');
     await Promise.all([
-      page.waitForURL(url => url.searchParams.get('s') === 'CI Featured Visible' && url.searchParams.get('post_type') === 'product'),
+      page.waitForURL(url => url.searchParams.get('s') === 'CI Featured' && url.searchParams.get('post_type') === 'product'),
       search.press('Enter')
     ]);
-    await visible(page.getByRole('link', {name:'CI Featured Visible', exact:true}).first(), 'Expected search result');
+    for (const name of ['CI Featured Visible','CI Featured Search Only']) {
+      await visible(page.locator('main').getByRole('link',{name,exact:true}).first(), 'Expected search result: ' + name);
+    }
+    for (const name of ['CI Featured Catalog Only','CI Featured Hidden','CI Featured Draft']) {
+      assert.equal(await page.locator('main').getByRole('link',{name,exact:true}).count(),0,'Non-searchable product leaked: '+name);
+    }
+    await openHome(page);
+    // WooCommerce may redirect an exact single-result search to its canonical product page.
+    const exact = page.locator('.bk-header-search input[type=search]');
+    await exact.fill('CI Featured Visible');
+    const [searchResponse] = await Promise.all([
+      page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return response.request().isNavigationRequest() && url.origin === base.origin
+          && url.searchParams.get('s') === 'CI Featured Visible' && url.searchParams.get('post_type') === 'product';
+      }),
+      exact.press('Enter')
+    ]);
+    assert([200,301,302,303,307,308].includes(searchResponse.status()), 'Exact search HTTP failure');
+    await page.waitForURL(url => url.href === productUrl.href || (url.origin === base.origin && url.searchParams.get('s') === 'CI Featured Visible' && url.searchParams.get('post_type') === 'product'));
+    if (new URL(page.url()).href === productUrl.href) {
+      await visible(page.locator('main').getByRole('heading',{name:'CI Featured Visible',exact:true}).first(), 'Expected single-result product');
+    } else {
+      await visible(page.locator('main').getByRole('link',{name:'CI Featured Visible',exact:true}).first(), 'Expected exact search result');
+    }
     await openHome(page);
     const card = page.locator('.bk-product-card').filter({has:page.getByRole('heading',{name:'CI Featured Visible',exact:true})});
     const action = card.locator('form');
     const cartUrl = new URL(await action.getAttribute('action'), base);
     assert.equal(cartUrl.origin, base.origin);
-    await card.locator('button[type=submit]').click();
-    await page.waitForURL(url => url.pathname === cartUrl.pathname && (!cartUrl.search || url.searchParams.get('page_id') === cartUrl.searchParams.get('page_id')));
+    const button = card.getByRole('button',{name:'Añadir al carrito: CI Featured Visible',exact:true});
+    await visible(button, 'Accessible purchase button');
+    await Promise.all([
+      page.waitForURL(url => url.origin === cartUrl.origin && url.pathname === cartUrl.pathname && (!cartUrl.search || url.searchParams.get('page_id') === cartUrl.searchParams.get('page_id'))),
+      button.click()
+    ]);
     await visible(page.getByText('CI Featured Visible',{exact:true}).first(), 'Fixture product missing from cart');
     // Native Store API confirms cart contents, independent of visible labels.
     const cart = await page.evaluate(async () => {
