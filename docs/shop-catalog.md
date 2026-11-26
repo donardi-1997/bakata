@@ -1,0 +1,16 @@
+# Catálogo Bakatá — primera implementación
+
+Plantillas de bloque archive-product, taxonomy-product_cat, taxonomy-product_tag y product-search-results. Se conserva el bloque legacy-template de WooCommerce para el loop principal, las notificaciones, los precios, enlaces, resultados, ordenamiento, carrito y paginación nativos. Sin consultas SQL propias ni dependencias. El CSS está acotado a bk-shop. 12 productos por página en la consulta principal WooCommerce. La navegación por categorías usa términos reales (hasta 100, excluye predeterminada), y cambia de contexto reiniciando los filtros. El formulario GET de precios conserva búsqueda o categoría y ordenamiento estándar; se delega el filtrado al motor WooCommerce. La moneda se obtiene de la configuración. No se altera la base de datos ni se activa ningún método de pago.
+
+La prueba de navegador agrega 13 productos exclusivamente a CI, después de la suite de homepage para no modificar sus expectativas. Comprueba paginación, categoría, rango 20.000–40.000, orden descendente, reset, responsive y axe en 320/768/1440. El ordenamiento se valida mediante la URL nativa, no todavía el evento de selección del dropdown. El estilo de los componentes del loop nativo puede requerir ajustes en la primera ejecución. No equivale a una validación de catálogo comercial real.
+
+Pendiente: filtros de atributos (requieren taxonomías de inventario reales), interfaz de filtros avanzados, revisión visual de capturas, catálogo sin productos en navegador, auditoría de búsqueda y categorías combinadas, prueba de variaciones, y fichas de producto. No se añaden datos a Lightsail.
+
+## QA de integración con la búsqueda
+La prueba de homepage ahora verifica el título exacto dentro de cada tarjeta nativa y su enlace de producto, en vez del nombre accesible exacto del enlace que también puede incluir el precio. Se conserva la comprobación de exclusión de productos y el flujo de carrito. Los fallos incluyen URL y texto principal de la página de fixture para diagnosticar regresiones.
+
+## Corrección semántica del archivo
+WooCommerce 11.3.1 añade un main propio en sus wrappers clásicos. Las cuatro plantillas conservan el main exterior y renderizan el bloque legacy-template mediante bakata_shop_archive. El shortcode suspende exclusivamente los dos callbacks de wrapper nativos durante esa representación y los restaura en finally. Se mantienen los demás hooks, resultados, avisos, ordenamiento, paginación y lógica comercial. La prueba exige un único landmark main y filtros dentro del mismo, además de la ausencia de main anidado. No se cambia el comportamiento de las fichas individuales.
+
+## Sincronización de navegación en QA
+La ejecución 45811155537 confirmó que el catálogo vuelve a mostrar los 12 productos tras limpiar filtros, pero el conteo instantáneo de Playwright devolvía cero durante la navegación. Las transiciones por enlaces esperan su URL de destino y la carga del documento; los conteos esperan una condición observable con un límite de diez segundos, sin pausas fijas. El reset además verifica campos de precio vacíos, eliminación de parámetros y categoría activa. No se deshabilitan las comprobaciones de accesibilidad ni se cambia la lógica comercial.

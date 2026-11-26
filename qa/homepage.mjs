@@ -127,11 +127,25 @@ async function checkShopping() {
       page.waitForURL(url => url.searchParams.get('s') === 'CI Featured' && url.searchParams.get('post_type') === 'product'),
       search.press('Enter')
     ]);
-    for (const name of ['CI Featured Visible','CI Featured Search Only']) {
-      await visible(page.locator('main').getByRole('link',{name,exact:true}).first(), 'Expected search result: ' + name);
+    // Native archive links wrap the heading and price, so their accessible name
+    // is not necessarily the exact product title. Assert the actual title and destination.
+    const searchResults = page.locator('main.bk-shop ul.products li.product');
+    await searchResults.first().waitFor({state:'visible',timeout:10000});
+    async function verifySearchProduct(name, expectedUrl = null) {
+      const result = searchResults.filter({has:page.getByRole('heading',{name,exact:true})});
+      assert.equal(await result.count(),1,'Expected exactly one product: '+name);
+      await visible(result.getByRole('heading',{name,exact:true}),'Expected search title: '+name);
+      const href = await result.locator('a.woocommerce-LoopProduct-link, a.woocommerce-loop-product__link').first().getAttribute('href');
+      assert(href,'Product link missing: '+name);
+      const destination = new URL(href,base);
+      assert.equal(destination.origin,base.origin);
+      if (expectedUrl) assert.equal(destination.href,expectedUrl.href,'Wrong product URL');
+      else assert(destination.pathname.includes('ci-featured-search-only') || destination.searchParams.has('p'),'Unexpected search-only destination');
     }
+    await verifySearchProduct('CI Featured Visible',productUrl);
+    await verifySearchProduct('CI Featured Search Only');
     for (const name of ['CI Featured Catalog Only','CI Featured Hidden','CI Featured Draft']) {
-      assert.equal(await page.locator('main').getByRole('link',{name,exact:true}).count(),0,'Non-searchable product leaked: '+name);
+      assert.equal(await page.locator('main').getByRole('heading',{name,exact:true}).count(),0,'Non-searchable product leaked: '+name);
     }
     await openHome(page);
     // WooCommerce may redirect an exact single-result search to its canonical product page.
@@ -150,7 +164,7 @@ async function checkShopping() {
     if (new URL(page.url()).href === productUrl.href) {
       await visible(page.locator('main').getByRole('heading',{name:'CI Featured Visible',exact:true}).first(), 'Expected single-result product');
     } else {
-      await visible(page.locator('main').getByRole('link',{name:'CI Featured Visible',exact:true}).first(), 'Expected exact search result');
+      await verifySearchProduct('CI Featured Visible',productUrl);
     }
     await openHome(page);
     const card = page.locator('.bk-product-card').filter({has:page.getByRole('heading',{name:'CI Featured Visible',exact:true})});
@@ -179,7 +193,7 @@ async function checkShopping() {
     await page.screenshot({path:output('cart-fixture.png'),fullPage:true});
     results.push({shopping:'passed', cartQuantity:1});
   } catch (error) {
-    failures.push({shopping:String(error)});
+    failures.push({shopping:String(error), url:page.url(), mainText:(await page.locator('main').first().innerText({timeout:2000}).catch(()=>'' )).slice(0,1800)});
     await page.screenshot({path:output('failure-cart.png'),fullPage:true}).catch(() => {});
   } finally { await context.close(); }
 }
