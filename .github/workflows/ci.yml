@@ -18,6 +18,11 @@ jobs:
           docker compose -f services/intelligence/compose.yaml build fixture
           docker compose -f services/intelligence/compose.yaml run --rm -T fixture python -m unittest discover -s tests -v
           docker compose -f services/intelligence/compose.yaml run --rm -T fixture
+      - name: Intelligence pilot — controlled loopback TLS verification
+        env:
+          BAKATA_REQUIRE_TLS_TEST: '1'
+          PYTHONPATH: services/intelligence
+        run: python3 -m unittest discover -s services/intelligence/tests -p test_pilot_tls.py -v
       - name: Intelligence jobs — persistent offline scheduler smoke
         shell: bash
         run: |
