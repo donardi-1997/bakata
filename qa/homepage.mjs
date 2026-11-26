@@ -90,7 +90,7 @@ async function checkLayout(width) {
     assert.equal(await page.locator('.bk-collections').count(), mode === 'empty' ? 0 : 1);
     if (mode === 'populated') {
       const collection = page.locator('.bk-collection-card');
-      assert.equal(await collection.count(), 1);
+      assert.equal(await collection.count(), 1, 'Exactly one link per configured editorial collection');
       await visible(collection, 'Editorial collection');
       assert.equal(new URL(await collection.getAttribute('href'), base).origin, base.origin);
     }
@@ -140,7 +140,7 @@ async function checkLayout(width) {
     assert.equal(localFailures.length, 0, 'Local HTTP failures: ' + localFailures.join('; '));
     assert.equal(violations.length, 0, 'WCAG axe violations: ' + JSON.stringify(violations));
   } catch (error) {
-    failures.push({width, error: String(error)});
+    failures.push({width, error: String(error), stack: error.stack});
     await page.screenshot({path: output('failure-' + mode + '-' + width + '.png'), fullPage: true}).catch(() => {});
   } finally {
     await context.close();
