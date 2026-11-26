@@ -11,3 +11,6 @@ La prueba de homepage ahora verifica el título exacto dentro de cada tarjeta na
 
 ## Corrección semántica del archivo
 WooCommerce 11.3.1 añade un main propio en sus wrappers clásicos. Las cuatro plantillas conservan el main exterior y renderizan el bloque legacy-template mediante bakata_shop_archive. El shortcode suspende exclusivamente los dos callbacks de wrapper nativos durante esa representación y los restaura en finally. Se mantienen los demás hooks, resultados, avisos, ordenamiento, paginación y lógica comercial. La prueba exige un único landmark main y filtros dentro del mismo, además de la ausencia de main anidado. No se cambia el comportamiento de las fichas individuales.
+
+## Sincronización de navegación en QA
+La ejecución 45811155537 confirmó que el catálogo vuelve a mostrar los 12 productos tras limpiar filtros, pero el conteo instantáneo de Playwright devolvía cero durante la navegación. Las transiciones por enlaces esperan su URL de destino y la carga del documento; los conteos esperan una condición observable con un límite de diez segundos, sin pausas fijas. El reset además verifica campos de precio vacíos, eliminación de parámetros y categoría activa. No se deshabilitan las comprobaciones de accesibilidad ni se cambia la lógica comercial.
