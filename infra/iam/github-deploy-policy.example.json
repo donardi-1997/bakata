@@ -1,0 +1,25 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DeployOnlyBakataDev",
+      "Effect": "Allow",
+      "Action": "ssm:SendCommand",
+      "Resource": [
+        "arn:aws:ssm:us-east-1:AWS_ACCOUNT_ID:document/Bakata-DeployDev",
+        "arn:aws:ssm:us-east-1:AWS_ACCOUNT_ID:managed-instance/MANAGED_INSTANCE_ID"
+      ]
+    },
+    {
+      "Sid": "ReadCommandStatus",
+      "Effect": "Allow",
+      "Action": "ssm:GetCommandInvocation",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-1"
+        }
+      }
+    }
+  ]
+}

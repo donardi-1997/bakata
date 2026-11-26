@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "2.2",
+  "description": "Deploy exact validated commit to Bakata development node",
+  "parameters": {
+    "Commit": {
+      "type": "String",
+      "description": "40-character Git commit SHA on main",
+      "allowedPattern": "^[0-9a-f]{40}$",
+      "interpolationType": "ENV_VAR"
+    }
+  },
+  "mainSteps": [
+    {
+      "action": "aws:runShellScript",
+      "name": "deployBakataDev",
+      "inputs": {
+        "timeoutSeconds": "300",
+        "runCommand": [
+          "set -eu",
+          "test -n \"$SSM_Commit\"",
+          "exec /usr/local/sbin/bakata-deploy-dev \"$SSM_Commit\""
+        ]
+      }
+    }
+  ]
+}
