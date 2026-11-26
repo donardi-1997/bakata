@@ -28,7 +28,7 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     enqueue = sub.add_parser("enqueue")
     enqueue.add_argument("job_id")
-    enqueue.add_argument("--due",type=int)
+    enqueue.add_argument("--due",type=int,required=True)
     schedule = sub.add_parser("schedule")
     schedule.add_argument("schedule_id")
     schedule.add_argument("--interval",type=int,required=True)
@@ -45,7 +45,7 @@ def main():
     with closing(sqlite3.connect(args.db, timeout=5)) as db:
         queue = JobQueue(db)
         if args.command == "enqueue":
-            data = {"queued":queue.enqueue(args.job_id, args.due if args.due is not None else now, now)}
+            data = {"queued":queue.enqueue(args.job_id, args.due, now)}
         elif args.command == "schedule":
             queue.configure_schedule(args.schedule_id,args.interval,args.first_due)
             data = {"configured":args.schedule_id}
