@@ -31,3 +31,7 @@ Bakatá Core incluye un módulo Pricing puro que recibe costos y política expl�
 ## Preparación de importaciones
 
 DraftPlanner une la fuente normalizada con una cotización explícita. WooDraftImporter es una API interna de creación de borradores inertes, sin invocador comercial ni sincronización. No hay actualización de productos existentes. Véase [importación a borrador](draft-import.md).
+
+## Reconciliación de inventario en modo lectura
+
+InventoryPreview distingue observaciones confirmadas, desconocidas, caducadas y conflictivas, y calcula una cantidad candidata bajo política explícita. WooInventoryPreview lee exclusivamente borradores mapeados mediante CRUD, sin escribir stock. Véase [previsualización de inventario](inventory-preview.md).
