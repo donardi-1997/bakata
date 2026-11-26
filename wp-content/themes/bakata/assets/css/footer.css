@@ -1,0 +1,34 @@
+/* Bakatá trust links and shared site footer. No external scripts. */
+.bk-trust { box-sizing: border-box; width: min(100%, var(--bk-wide)); margin: clamp(1rem, 3vw, 2rem) auto; }
+.bk-trust-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: .5rem; list-style: none; margin: 0; padding: .5rem; border-radius: var(--bk-radius-lg); background: var(--bk-surface-muted); }
+.bk-trust-list > li { min-width: 0; }
+.bk-trust-item { box-sizing: border-box; display: flex; align-items: flex-start; gap: .75rem; min-height: 44px; height: 100%; padding: .8rem; border-radius: var(--bk-radius-md); color: var(--bk-primary); text-decoration: none; overflow-wrap: anywhere; }
+.bk-trust-item:visited { color: var(--bk-primary); }
+.bk-trust-item:hover { background: var(--bk-background); }
+.bk-trust-item strong, .bk-trust-item small { display: block; }
+.bk-trust-item small { color: var(--bk-text-muted); font-size: var(--bk-size-small); line-height: 1.5; }
+.bk-trust-item .bk-icon { width: 28px; height: 28px; }
+.bk-trust-item:focus-visible { outline: 2px solid var(--bk-focus); outline-offset: -2px; }
+.bk-store-footer { background: var(--bk-primary); color: var(--bk-on-primary); font-family: var(--bk-body); }
+.bk-footer-inner, .bk-footer-bottom { box-sizing: border-box; width: min(100%, var(--bk-wide)); margin-inline: auto; padding-inline: var(--bk-gutter); }
+.bk-footer-inner { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--bk-space-6); padding-block: clamp(2rem, 5vw, 4rem); }
+.bk-footer-brand { min-width: 0; }
+.bk-footer-brand a { display: inline-flex; align-items: center; min-height: 44px; }
+.bk-footer-brand .bk-logo { width: min(190px, 100%); }
+.bk-footer-brand p { margin: .5rem 0; }
+.bk-footer-heading { font-weight: 700; font-family: var(--bk-heading); margin: 0 0 .5rem; }
+.bk-footer-nav ul { list-style: none; padding: 0; margin: 0; }
+.bk-footer-nav a, .bk-footer-bottom a { display: inline-flex; align-items: center; min-height: 44px; color: var(--bk-on-primary); text-decoration: underline; text-underline-offset: .18em; overflow-wrap: anywhere; }
+.bk-footer-nav a:visited, .bk-footer-bottom a:visited { color: var(--bk-on-primary); }
+.bk-footer-nav a:hover, .bk-footer-bottom a:hover { text-decoration-thickness: 2px; }
+.bk-store-footer a:focus-visible { outline: 2px solid var(--bk-on-primary); outline-offset: 3px; }
+.bk-footer-bottom { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; border-top: 1px solid var(--bk-border); padding-block: .5rem; }
+@media (min-width: 36rem) {
+  .bk-trust-list { grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); }
+  .bk-footer-inner { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bk-footer-brand { grid-column: 1 / -1; }
+}
+@media (min-width: 64rem) {
+  .bk-footer-inner { grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr)); }
+  .bk-footer-brand { grid-column: auto; }
+}

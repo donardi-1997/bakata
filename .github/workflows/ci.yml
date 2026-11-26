@@ -66,6 +66,24 @@ jobs:
           if grep -Eq 'CI Featured Hidden|CI Featured Search Only|CI Featured Draft|CI Not Featured' /tmp/bakata-catalog.html; then
             echo 'Non-catalog product leaked'; exit 1
           fi
+      - name: Verify footer and service links
+        run: |
+          grep -F 'class="bk-trust"' /tmp/bakata-home.html
+          grep -F 'class="bk-store-footer bk-inverse"' /tmp/bakata-home.html
+          grep -F 'logo-negativo.svg' /tmp/bakata-home.html
+          grep -F 'footer.css' /tmp/bakata-home.html
+          grep -F 'Tus pedidos' /tmp/bakata-home.html
+          if grep -Eq 'Información de envíos|Cambios y devoluciones|ci-shipping-public' /tmp/bakata-home.html; then
+            echo 'Unconfigured service link exposed'; exit 1
+          fi
+          php -l scripts/footer-fixtures-ci.php
+          docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 cli wp eval "$(tail -n +2 scripts/footer-fixtures-ci.php)"
+          curl --fail --silent --show-error http://localhost:8080/ -o /tmp/bakata-footer.html
+          grep -F 'ci-shipping-public' /tmp/bakata-footer.html
+          grep -F 'ci-privacy-public' /tmp/bakata-footer.html
+          if grep -Eq 'ci-returns-draft|ci-contact-protected|ci-terms-private' /tmp/bakata-footer.html; then
+            echo 'Nonpublic service page exposed'; exit 1
+          fi
       - name: Diagnostic logs
         if: failure()
         run: docker compose logs --tail=100
