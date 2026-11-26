@@ -22,7 +22,7 @@ function bakata_checkout_navigation(): string {
     if (empty($links['cart'])) {
         return '';
     }
-    return '<nav class="bk-checkout-navigation" aria-label="' . esc_attr__('Navegación de compra', 'bakata') .
+    return bakata_purchase_steps('checkout') . '<nav class="bk-checkout-navigation" aria-label="' . esc_attr__('Navegación de compra', 'bakata') .
         '"><a class="bk-link" href="' . esc_url($links['cart']) . '">' .
         esc_html__('Volver al carrito', 'bakata') . '</a></nav>';
 }
