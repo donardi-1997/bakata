@@ -145,6 +145,12 @@ jobs:
           export BAKATA_CI_OTHER_ORDER="$(printf '%s\n' "$fixture" | sed -n 's/^BAKATA_CI_OTHER_ORDER=\([0-9]*\)$/\1/p')"
           node --check qa/account.mjs
           node qa/account.mjs
+      - name: Draft import — isolated WooCommerce CRUD and safety tests
+        env:
+          BAKATA_CI_FIXTURES: '1'
+        run: |
+          php -l scripts/test-draft-import-ci.php
+          docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 cli wp eval "$(tail -n +2 scripts/test-draft-import-ci.php)"
       - name: Lighthouse diagnostic report
         if: success()
         continue-on-error: true

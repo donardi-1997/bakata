@@ -27,3 +27,7 @@ Se implementan contratos PHP de catálogo y una previsualización acotada en mem
 ## Simulación de precios
 
 Bakatá Core incluye un módulo Pricing puro que recibe costos y política explícitos, calcula contribución y propone un precio de escenario sin escribir en WooCommerce. No reemplaza impuestos, pagos ni configuración comercial. Véase [previsualización de precios](pricing-preview.md).
+
+## Preparación de importaciones
+
+DraftPlanner une la fuente normalizada con una cotización explícita. WooDraftImporter es una API interna de creación de borradores inertes, sin invocador comercial ni sincronización. No hay actualización de productos existentes. Véase [importación a borrador](draft-import.md).
