@@ -39,6 +39,12 @@ jobs:
           grep -F 'logo-horizontal.svg' /tmp/bakata-home.html
           grep -F 'name="post_type" value="product"' /tmp/bakata-home.html
           grep -F 'fonts.css' /tmp/bakata-home.html
+          grep -F 'class="bk-hero"' /tmp/bakata-home.html
+          grep -F 'class="bk-button bk-hero__cta"' /tmp/bakata-home.html
+          grep -F 'hero-editorial.webp' /tmp/bakata-home.html
+          grep -F 'hero.css' /tmp/bakata-home.html
+          curl --fail --silent --show-error http://localhost:8080/wp-content/themes/bakata/assets/images/hero-editorial.webp -o /tmp/bakata-hero.webp
+          test "$(git hash-object /tmp/bakata-hero.webp)" = '0148bd8d5d3fe350c65e37833549b72f66680909'
           curl --fail --silent --show-error http://localhost:8080/wp-content/themes/bakata/assets/fonts/inter.woff2 -o /tmp/bakata-inter.woff2
           test "$(git hash-object /tmp/bakata-inter.woff2)" = '5a8d3e72ad7ffb62af3b146e1b1f54ab5813a212'
           curl --fail --silent --show-error http://localhost:8080/wp-content/themes/bakata/assets/css/design-system.css -o /tmp/bakata-design-system.css
