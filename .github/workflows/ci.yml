@@ -12,6 +12,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Intelligence foundation — offline adapter and observation tests
+        run: |
+          docker compose -f services/intelligence/compose.yaml config --quiet
+          docker compose -f services/intelligence/compose.yaml build fixture
+          docker compose -f services/intelligence/compose.yaml run --rm -T fixture python -m unittest discover -s tests -v
+          docker compose -f services/intelligence/compose.yaml run --rm -T fixture
       - name: Validate PHP syntax
         run: docker run --rm -v "$PWD/wp-content:/src:ro" php:8.3-cli sh -c 'find /src -name "*.php" -exec php -l {} +'
       - name: Supplier foundation — isolated contract and preview tests
