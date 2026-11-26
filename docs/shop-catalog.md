@@ -5,3 +5,6 @@ Plantillas de bloque archive-product, taxonomy-product_cat, taxonomy-product_tag
 La prueba de navegador agrega 13 productos exclusivamente a CI, después de la suite de homepage para no modificar sus expectativas. Comprueba paginación, categoría, rango 20.000–40.000, orden descendente, reset, responsive y axe en 320/768/1440. El ordenamiento se valida mediante la URL nativa, no todavía el evento de selección del dropdown. El estilo de los componentes del loop nativo puede requerir ajustes en la primera ejecución. No equivale a una validación de catálogo comercial real.
 
 Pendiente: filtros de atributos (requieren taxonomías de inventario reales), interfaz de filtros avanzados, revisión visual de capturas, catálogo sin productos en navegador, auditoría de búsqueda y categorías combinadas, prueba de variaciones, y fichas de producto. No se añaden datos a Lightsail.
+
+## QA de integración con la búsqueda
+La prueba de homepage ahora verifica el título exacto dentro de cada tarjeta nativa y su enlace de producto, en vez del nombre accesible exacto del enlace que también puede incluir el precio. Se conserva la comprobación de exclusión de productos y el flujo de carrito. Los fallos incluyen URL y texto principal de la página de fixture para diagnosticar regresiones.
