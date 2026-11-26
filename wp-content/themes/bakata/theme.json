@@ -62,6 +62,91 @@
           "name": "Sistema",
           "fontFamily": "system-ui, sans-serif"
         }
+      ],
+      "fontSizes": [
+        {
+          "slug": "bk-small",
+          "name": "Pequeño",
+          "size": "0.875rem"
+        },
+        {
+          "slug": "bk-body",
+          "name": "Cuerpo",
+          "size": "1rem"
+        },
+        {
+          "slug": "bk-lead",
+          "name": "Entradilla",
+          "size": "1.125rem"
+        },
+        {
+          "slug": "bk-h3",
+          "name": "Título 3",
+          "size": "1.375rem"
+        },
+        {
+          "slug": "bk-h2",
+          "name": "Título 2",
+          "size": "clamp(1.5rem, 3vw, 2.25rem)",
+          "fluid": false
+        },
+        {
+          "slug": "bk-h1",
+          "name": "Título 1",
+          "size": "clamp(2rem, 5vw, 4rem)",
+          "fluid": false
+        }
+      ]
+    },
+    "spacing": {
+      "units": [
+        "px",
+        "rem",
+        "%",
+        "vw",
+        "vh"
+      ],
+      "spacingSizes": [
+        {
+          "slug": "bk-1",
+          "size": "0.25rem",
+          "name": "Bakatá 1"
+        },
+        {
+          "slug": "bk-2",
+          "size": "0.5rem",
+          "name": "Bakatá 2"
+        },
+        {
+          "slug": "bk-3",
+          "size": "0.75rem",
+          "name": "Bakatá 3"
+        },
+        {
+          "slug": "bk-4",
+          "size": "1rem",
+          "name": "Bakatá 4"
+        },
+        {
+          "slug": "bk-5",
+          "size": "1.5rem",
+          "name": "Bakatá 5"
+        },
+        {
+          "slug": "bk-6",
+          "size": "2rem",
+          "name": "Bakatá 6"
+        },
+        {
+          "slug": "bk-7",
+          "size": "3rem",
+          "name": "Bakatá 7"
+        },
+        {
+          "slug": "bk-8",
+          "size": "4rem",
+          "name": "Bakatá 8"
+        }
       ]
     }
   },
@@ -88,7 +173,7 @@
           "text": "var:preset|color|marfil"
         },
         "border": {
-          "radius": "0.4rem"
+          "radius": "0.75rem"
         },
         "spacing": {
           "padding": {
@@ -97,6 +182,9 @@
             "left": "1.4rem",
             "right": "1.4rem"
           }
+        },
+        "typography": {
+          "fontWeight": "600"
         }
       }
     }

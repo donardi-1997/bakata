@@ -22,6 +22,8 @@ jobs:
           python3 -m py_compile scripts/upload-backup.py
           cp .env.example .env
           docker compose config --quiet
+      - name: Validate design system tokens and assets
+        run: python3 scripts/check_design_system.py
       - name: Bootstrap local store
         run: bash scripts/bootstrap.sh
       - name: Smoke test
@@ -30,7 +32,11 @@ jobs:
           docker compose run --rm -T cli wp plugin is-active woocommerce
           docker compose run --rm -T cli wp plugin is-active bakata-core
           docker compose run --rm -T cli wp theme is-active bakata
-          curl --fail --silent --show-error --retry 5 http://localhost:8080/ | grep -F 'Descubre. Simplifica. Disfruta.'
+          curl --fail --silent --show-error --retry 5 http://localhost:8080/ -o /tmp/bakata-home.html
+          grep -F 'Descubre. Simplifica. Disfruta.' /tmp/bakata-home.html
+          grep -F 'design-system.css' /tmp/bakata-home.html
+          curl --fail --silent --show-error http://localhost:8080/wp-content/themes/bakata/assets/css/design-system.css -o /tmp/bakata-design-system.css
+          grep -F -- '--bk-primary: #1F3A37' /tmp/bakata-design-system.css
       - name: Diagnostic logs
         if: failure()
         run: docker compose logs --tail=100
