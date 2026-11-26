@@ -22,6 +22,8 @@ jobs:
         run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-inventory-preview.php
       - name: Order preview — isolated eligibility and grouping tests
         run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-order-preview.php
+      - name: Fulfillment preview — isolated state machine and group tests
+        run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-fulfillment-preview.php
       - name: Validate theme JSON and shell
         run: |
           python3 -m json.tool wp-content/themes/bakata/theme.json > /dev/null

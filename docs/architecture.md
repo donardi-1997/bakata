@@ -39,3 +39,7 @@ InventoryPreview distingue observaciones confirmadas, desconocidas, caducadas y 
 ## Preparación de pedidos
 
 OrderPreview agrupa líneas históricas con mapeos explícitos por proveedor y genera referencias estables y huellas separadas, sin escribir pedidos ni enviar órdenes. WooOrderPreview consulta mediante CRUD con permisos y reglas conservadoras de elegibilidad. Véase [preparación de pedidos](order-preview.md).
+
+## Fulfillment y seguimiento logístico
+
+FulfillmentPreview reproduce historias de eventos normalizados por grupo de OrderPreview y agrega estados logísticos sin modificar pago, stock ni estado de WooCommerce. No es un receptor de webhooks ni una operación persistente. Véase [previsualización de fulfillment](fulfillment-preview.md).
