@@ -113,6 +113,14 @@ jobs:
           docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 cli wp eval "$(tail -n +2 scripts/product-fixtures-ci.php)"
           node --check qa/product.mjs
           node qa/product.mjs
+      - name: Browser QA — cart quantities, coupon and removal
+        env:
+          BAKATA_CI_FIXTURES: '1'
+        run: |
+          php -l scripts/cart-fixtures-ci.php
+          docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 cli wp eval "$(tail -n +2 scripts/cart-fixtures-ci.php)"
+          node --check qa/cart.mjs
+          node qa/cart.mjs
       - name: Lighthouse diagnostic report
         if: success()
         continue-on-error: true
