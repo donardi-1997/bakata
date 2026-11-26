@@ -91,3 +91,16 @@
     margin-inline-end: .35rem;
   }
 }
+
+/* Dashboard: clear, responsive shortcuts without replacing native endpoints. */
+.bk-account .bk-account-shortcuts { margin-block:clamp(1.25rem,3vw,2rem) 0; }
+.bk-account .bk-account-shortcut-grid { display:grid; grid-template-columns:minmax(0,1fr); gap:var(--bk-space-3); list-style:none; padding:4px; margin:0; }
+.bk-account .bk-account-shortcut-grid li { min-width:0; }
+.bk-account .bk-account-shortcut { display:flex; flex-direction:column; align-items:flex-start; gap:.65rem; box-sizing:border-box; height:100%; min-height:9rem; padding:1rem; border:1px solid var(--bk-border); border-radius:var(--bk-radius-md); background:var(--bk-background); color:var(--bk-primary); text-decoration:none; overflow-wrap:anywhere; }
+.bk-account .bk-account-shortcut-title { font-family:var(--bk-heading); font-size:1.125rem; font-weight:700; }
+.bk-account .bk-account-shortcut-arrow { margin-top:auto; font-size:1.25rem; font-weight:700; }
+.bk-account .bk-account-shortcut:hover .bk-account-shortcut-title { text-decoration:underline; text-underline-offset:.2em; }
+.bk-account .woocommerce-MyAccount-content { box-shadow:none; }
+.bk-account .woocommerce-MyAccount-navigation a[aria-current=page] { font-weight:700; }
+.bk-account .woocommerce form :is(.woocommerce-form-login__submit,.woocommerce-form-register__submit) { width:100%; margin-block-start:.5rem; }
+@media(min-width:48rem) { .bk-account .bk-account-shortcut-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr)); } }

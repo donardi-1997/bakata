@@ -65,6 +65,7 @@ async function run(width) {
     await login.waitFor({state:'visible'});
     await main.locator('form.woocommerce-form-register #reg_email').waitFor({state:'visible'});
     assert.equal(await nav.count(),0,'No account navigation for guests');
+    assert.equal(await main.locator('.bk-account-shortcuts').count(),0,'No dashboard shortcuts for guests');
     assert.equal(await main.locator('.woocommerce-orders-table').count(),0);
     await audit(page,'guest-'+width);
     phase='recovery';
@@ -81,9 +82,18 @@ async function run(width) {
     await nav.waitFor({state:'visible'});
     assert.equal(await login.count(),0,'Authentication succeeded');
     assert.equal(await nav.locator('a[aria-current=page]').count(),1);
+    const shortcuts=content.locator('.bk-account-shortcuts');
+    await shortcuts.waitFor({state:'visible'});
+    assert.equal(await shortcuts.locator('a.bk-account-shortcut').count(),3,'Three native dashboard shortcuts');
+    for(const [label,endpoint] of [['Mis pedidos','orders'],['Mis direcciones','edit-address'],['Mi perfil','edit-account']]) {
+      const link=shortcuts.getByRole('link',{name:new RegExp('^'+label)});
+      const native=nav.locator('.woocommerce-MyAccount-navigation-link--'+endpoint+' a');
+      assert.equal(new URL(await link.getAttribute('href'),base).href,new URL(await native.getAttribute('href'),base).href,'Shortcut uses native endpoint');
+    }
     await audit(page,'dashboard-'+width);
     phase='orders';
-    await follow(page,nav.locator('.woocommerce-MyAccount-navigation-link--orders a'));
+    await follow(page,shortcuts.getByRole('link',{name:/^Mis pedidos/}));
+    assert.equal(await main.locator('.bk-account-shortcuts').count(),0,'Shortcuts only on dashboard');
     const rows=content.locator('.woocommerce-orders-table__row');
     await rows.first().waitFor({state:'visible'});
     assert.equal(await rows.count(),1,'Only own historical order');
