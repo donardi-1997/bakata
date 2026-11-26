@@ -9,7 +9,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Validate PHP syntax
         run: docker run --rm -v "$PWD/wp-content:/src:ro" php:8.3-cli sh -c 'find /src -name "*.php" -exec php -l {} +'
       - name: Validate theme JSON and shell
@@ -36,7 +38,7 @@ jobs:
         run: docker compose down -v
   deploy_dev:
     needs: checks
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.BAKATA_CD_ENABLED == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected && vars.BAKATA_CD_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
