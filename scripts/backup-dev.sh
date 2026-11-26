@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Root-only local recovery points. Not an off-site backup.
+# Root-only local and S3 recovery points.
 set -euo pipefail
 umask 077
 [[ $EUID == 0 ]] || { echo 'Requiere root'; exit 1; }
@@ -27,12 +27,13 @@ tar -C / -czf "$stage/host-config.tar.gz" \
   etc/ssh/sshd_config.d/00-bakata-hardening.conf \
   etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 runuser -u ubuntu -- git -C /home/ubuntu/bakata rev-parse HEAD > "$stage/git-commit"
+docker inspect --format '{{.Name}} {{.Image}}' bakata-db-1 bakata-wordpress-1 > "$stage/image-ids"
 gzip -t "$stage/database.sql.gz"
 tar -tzf "$stage/wordpress.tar.gz" >/dev/null
 tar -tzf "$stage/host-config.tar.gz" >/dev/null
 (
   cd "$stage"
-  sha256sum database.sql.gz wordpress.tar.gz host-config.tar.gz git-commit > SHA256SUMS
+  sha256sum database.sql.gz wordpress.tar.gz host-config.tar.gz git-commit image-ids > SHA256SUMS
   sha256sum -c SHA256SUMS
 )
 mv -T -- "$stage" "$base/backup-$stamp"
@@ -42,3 +43,5 @@ find "$base" -mindepth 1 -maxdepth 1 -regextype posix-extended -type d \
   -regex "$base/backup-[0-9]{8}T[0-9]{6}Z" -mmin +10080 -exec rm -rf -- {} +
 echo "Backup local verificado: $base/backup-$stamp"
 du -sh "$base/backup-$stamp"
+
+/usr/bin/python3 /usr/local/sbin/bakata-upload-backup "$base/backup-$stamp"
