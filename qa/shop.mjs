@@ -47,6 +47,11 @@ async function run(width) {
     await followLink(page,category);
     await page.locator('.bk-shop-categories a[aria-current=page]').filter({hasText:'CI QA Shop Beta'}).waitFor();
     await waitForCards(page,12,'First category page');
+    assert.equal(await page.locator('.bk-taxonomy-intro').count(),1,'Category editorial intro');
+    assert.equal(await page.locator('.bk-taxonomy-title').innerText(),'CI QA Shop Beta');
+    assert.equal(await page.locator('main h1').count(),1,'Native archive H1 preserved');
+    assert.equal(new URL(await page.locator('.bk-taxonomy-copy a').first().getAttribute('href'),base).href,shopUrl.href);
+
     assert(await page.locator('.woocommerce-pagination').isVisible(),'Pagination required');
     const page2 = page.locator('.woocommerce-pagination a.page-numbers').filter({hasText:/^2$/});
     await followLink(page,page2);

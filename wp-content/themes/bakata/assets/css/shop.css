@@ -27,3 +27,15 @@
 @media (min-width:36rem) { .bk-shop-price-form { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (min-width:48rem) { .bk-shop ul.products { grid-template-columns: repeat(3,minmax(0,1fr)); } .bk-shop-price-form { grid-template-columns: repeat(2,minmax(0,1fr)) auto auto; } }
 @media (min-width:64rem) { .bk-shop ul.products { grid-template-columns: repeat(4,minmax(0,1fr)); gap: var(--bk-space-5); } }
+
+/* Editorial context above the native WooCommerce archive. */
+.bk-taxonomy-intro { display:grid; gap:1.5rem; margin-block:0 var(--bk-space-5); background:var(--bk-surface-muted); color:var(--bk-primary); border-radius:var(--bk-radius-lg); padding:clamp(1.25rem,4vw,3rem); overflow-wrap:anywhere; }
+.bk-taxonomy-copy { min-width:0; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:.75rem; }
+.bk-taxonomy-copy p { margin:0; }
+.bk-taxonomy-eyebrow { font-size:var(--bk-size-small); font-weight:600; letter-spacing:.08em; }
+.bk-taxonomy-title { color:inherit; font-size:clamp(2rem,5vw,3.5rem); line-height:1.1; }
+.bk-taxonomy-copy .bk-link { display:inline-flex; align-items:center; min-height:44px; color:inherit; }
+.bk-taxonomy-media { min-width:0; }
+.bk-taxonomy-media img { display:block; width:100%; height:auto; aspect-ratio:16/9; object-fit:cover; border-radius:var(--bk-radius-md); }
+.bk-taxonomy-children { margin-block:0 var(--bk-space-5); }
+@media(min-width:48rem) { .bk-taxonomy-intro:has(.bk-taxonomy-media) { grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:center; } }

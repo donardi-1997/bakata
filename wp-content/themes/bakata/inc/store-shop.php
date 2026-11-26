@@ -106,6 +106,54 @@ function bakata_render_shop_filters(): string {
 }
 add_shortcode('bakata_shop_filters', 'bakata_render_shop_filters');
 
+/** Editorial context for real category and collection archives; the native loop retains its H1. */
+function bakata_render_taxonomy_intro(): string {
+    if (!function_exists('is_product_taxonomy') || !is_product_taxonomy()) {
+        return '';
+    }
+    $term = get_queried_object();
+    if (!$term instanceof WP_Term || !in_array($term->taxonomy, ['product_cat', 'product_tag'], true)) {
+        return '';
+    }
+    $shop = bakata_catalog_shop_url();
+    $parent = $term->taxonomy === 'product_cat' && $term->parent ? get_term($term->parent, 'product_cat') : null;
+    $parent_url = $parent instanceof WP_Term ? get_term_link($parent) : '';
+    $children = $term->taxonomy === 'product_cat' ? get_terms([
+        'taxonomy' => 'product_cat', 'parent' => $term->term_id, 'hide_empty' => true,
+        'hierarchical' => true, 'pad_counts' => true, 'number' => 12, 'orderby' => 'name',
+    ]) : [];
+    if (is_wp_error($children)) { $children = []; }
+    $image_id = $term->taxonomy === 'product_cat' ? (int) get_term_meta($term->term_id, 'thumbnail_id', true) : 0;
+    $image = $image_id ? wp_get_attachment_image($image_id, 'medium_large', false, ['alt' => '', 'decoding' => 'async']) : '';
+    ob_start();
+    ?>
+    <div class="bk-taxonomy-intro">
+      <div class="bk-taxonomy-copy">
+        <p class="bk-taxonomy-eyebrow"><?php echo $term->taxonomy === 'product_tag' ? esc_html__('COLECCIONES BAKATÁ', 'bakata') : esc_html__('EXPLORA BAKATÁ', 'bakata'); ?></p>
+        <p class="bk-heading bk-taxonomy-title"><?php echo esc_html($term->name); ?></p>
+        <p><?php esc_html_e('Descubre nuestra selección y encuentra lo que encaja contigo.', 'bakata'); ?></p>
+        <?php if ($shop) : ?><a class="bk-link" href="<?php echo esc_url($shop); ?>"><?php esc_html_e('Ver toda la tienda', 'bakata'); ?></a><?php endif; ?>
+        <?php if (is_string($parent_url) && $parent_url) : ?><a class="bk-link" href="<?php echo esc_url($parent_url); ?>"><?php echo esc_html(sprintf(__('Volver a %s', 'bakata'), $parent->name)); ?></a><?php endif; ?>
+      </div>
+      <?php if ($image) : ?><div class="bk-taxonomy-media"><?php echo wp_kses_post($image); ?></div><?php endif; ?>
+    </div>
+    <?php if ($children) : ?>
+      <nav class="bk-shop-categories bk-taxonomy-children" aria-label="<?php esc_attr_e('Subcategorías de esta selección', 'bakata'); ?>">
+        <ul>
+          <?php foreach ($children as $child) :
+              $url = get_term_link($child);
+              if (is_wp_error($url)) { continue; }
+          ?>
+            <li><a href="<?php echo esc_url($url); ?>"><?php echo esc_html($child->name); ?></a></li>
+          <?php endforeach; ?>
+        </ul>
+      </nav>
+    <?php endif; ?>
+    <?php
+    return (string) ob_get_clean();
+}
+add_shortcode('bakata_taxonomy_intro', 'bakata_render_taxonomy_intro');
+
 // Limit the standard archive page size. No separate WP_Query or direct SQL.
 add_action('woocommerce_product_query', static function ($query): void {
     if ($query instanceof WP_Query && $query->is_main_query()) {
