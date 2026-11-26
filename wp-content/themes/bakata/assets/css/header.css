@@ -28,3 +28,11 @@
   .bk-header-account span { display: inline; font-size: var(--bk-size-small); font-weight: 600; }
 }
 @media (forced-colors: active) { .bk-header-control { border-color: ButtonText; } }
+
+.bk-category-nav { display:none; }
+@media (min-width:64rem) {
+ .bk-category-nav { display:flex; flex-wrap:wrap; justify-content:center; gap:.25rem 1.5rem; padding:.25rem 1rem; border-top:1px solid var(--bk-surface-muted); }
+ .bk-category-nav a { display:inline-flex; align-items:center; min-height:44px; color:var(--bk-primary); text-decoration:none; font-size:var(--bk-size-small); }
+ .bk-category-nav a:hover { text-decoration:underline; }
+ .bk-category-nav a:focus-visible { outline:2px solid var(--bk-focus); outline-offset:2px; }
+}
