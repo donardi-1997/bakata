@@ -20,6 +20,8 @@ jobs:
         run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-pricing-preview.php
       - name: Inventory preview — isolated reconciliation tests
         run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-inventory-preview.php
+      - name: Order preview — isolated eligibility and grouping tests
+        run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-order-preview.php
       - name: Validate theme JSON and shell
         run: |
           python3 -m json.tool wp-content/themes/bakata/theme.json > /dev/null
@@ -153,6 +155,12 @@ jobs:
         run: |
           php -l scripts/test-draft-import-ci.php
           docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 cli wp eval "$(tail -n +2 scripts/test-draft-import-ci.php)"
+      - name: Order preview — isolated WooCommerce CRUD tests
+        env:
+          BAKATA_CI_FIXTURES: '1'
+        run: |
+          php -l scripts/test-order-preview-ci.php
+          docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 cli wp eval "$(tail -n +2 scripts/test-order-preview-ci.php)"
       - name: Lighthouse diagnostic report
         if: success()
         continue-on-error: true
