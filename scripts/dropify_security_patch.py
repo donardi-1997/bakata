@@ -1,5 +1,11 @@
 """Additional source transformations for the exact audited Dropify archive."""
 import re
+from pathlib import Path
+
+
+def reservation_source():
+    path = Path(__file__).resolve().parent.parent / 'tools/dropify-quarantine/dispatch-reservation.php'
+    return path.read_text(encoding='utf-8').removeprefix('<?php\n').rstrip('\n')
 
 
 def one(source, old, new):
@@ -79,36 +85,7 @@ def patch_security(name, source):
                     $endpoint,
                     $args
                 );''')
-        source = one(source, 'class JPIODFW_OrdersModel', '''function bakata_dropify_reserve_dispatch($order, $token)
-{
-    global $wpdb;
-    if (!is_string($token) || trim($token) === '' || !($order instanceof WC_Order)) {
-        return false;
-    }
-    $id = $order->get_id();
-    $fresh = wc_get_order($id);
-    if (!$fresh || $id <= 0) {
-        return false;
-    }
-    $fresh->read_meta_data(true);
-    if ($fresh->get_meta('_dropi_order_id') !== '' || $fresh->get_meta('_is_dropi_order') !== '') {
-        return false;
-    }
-    // wp_options has a unique option_name index. INSERT (not add_option/upsert)
-    // ensures exactly one successful claimant under concurrent requests.
-    $previous = $wpdb->suppress_errors(true);
-    try {
-        return $wpdb->insert($wpdb->options, array(
-            'option_name' => 'bakata_dropify_dispatch_' . $id,
-            'option_value' => 'attempted',
-            'autoload' => 'no',
-        ), array('%s', '%s', '%s')) === 1;
-    } finally {
-        $wpdb->suppress_errors($previous);
-    }
-}
-
-class JPIODFW_OrdersModel''')
+        source = one(source, 'class JPIODFW_OrdersModel', reservation_source() + '\n\nclass JPIODFW_OrdersModel')
         source = one(source, "'timeout' => '100000',", "'timeout' => 30,")
         source = one(source, " __('Dropi sync error: ' . $error_message, 'wc-dropi-integration')", " __('Dropi sync error; reconcile manually', 'wc-dropi-integration')")
         source = one(source, " __('Dropi sync error: ' . $response_body['message'], 'dropi')", " __('Dropi sync error; reconcile manually', 'wc-dropi-integration')")

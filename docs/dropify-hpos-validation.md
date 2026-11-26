@@ -1,0 +1,13 @@
+# Dropify 4.7.3 — HPOS and concurrent reservation validation
+
+Third stage of the version-pinned offline builder. The archive remains outside Git and no generated plugin is deployed.
+
+The order list columns now accept either a WC_Order or the legacy integer ID and use WooCommerce CRUD get_meta for _is_dropi_order, _dropi_order_id and shipping_guide. All displayed metadata is escaped; unknown columns, missing orders, refunds and nonscalar values are ignored. Both legacy and HPOS list hooks are registered. This does not declare HPOS compatibility: real WordPress admin integration and both storage modes remain to be tested.
+
+The validation build removes the registered manual, bulk and automatic dispatch entrypoints, and public OrdersModel::save returns a blocked result even for direct callers. Unreleased implementation remains private for later work; no operational switch is offered. The old anonymous hooks are removed by the earlier transformations. Product import, settings and other external requests are not covered by this dispatch block. Keep network isolation and do not add real credentials.
+
+The reservation function is stored once in tools/dropify-quarantine/dispatch-reservation.php, and embedded verbatim (without the PHP opening tag) by the builder. The CI test loads that exact function in disposable WordPress, creates a synthetic pending order, synchronizes two independent WP-CLI claimants with a file barrier, then asserts one success, one rejection, a single non-autoloaded MariaDB row and a subsequent blocked attempt. It reports the active WooCommerce storage engine; it does not force both engines or establish provider-side idempotency.
+
+Local validation: third-stage transformation alone applied to the audited original ZIP (SHA-256 bf23c6b1c5dd640aab3d38e3f370a41fbd60139ac60a1ce5f0347a059e9b6700); 35 PHP files passed lint on PHP 8.4.24; 16 assertions passed with WordPress/WooCommerce stubs. The complete cumulative ZIP build and PHP 8.3 integration still need validation. Docker and MariaDB are not available in the local execution environment. The new CI job is the first real concurrent database validation, not yet confirmed.
+
+Run the complete builder offline, extract to a disposable directory, lint all PHP files and run test-dropify-hardening.php, test-dropify-dispatch.php and test-dropify-hpos.php against the extracted plugin root. Run the existing quarantine callback test without the plugin. Do not install the generated plugin on production. Remaining blockers include encryption/rotation of tokens, remaining security review and positive paths, both storage engines with sync disabled, full UI behavior, external sandbox and approval before any dispatch is enabled.
