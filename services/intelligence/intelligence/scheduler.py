@@ -2,6 +2,8 @@
 import argparse
 from contextlib import closing
 import json
+import os
+import signal
 import sqlite3
 import time
 
@@ -41,7 +43,11 @@ def main():
     for command in ("result","events"):
         sub.add_parser(command).add_argument("job_id")
     args = parser.parse_args()
+    os.umask(0o077)
     now = int(time.time())
+    # Linux container: terminate a stuck one-shot worker before its lease expires.
+    if args.command == "run-once":
+        signal.alarm(45)
     with closing(sqlite3.connect(args.db, timeout=5)) as db:
         queue = JobQueue(db)
         if args.command == "enqueue":
@@ -63,6 +69,8 @@ def main():
         else:
             data = queue.events(args.job_id)
         print(json.dumps(data,ensure_ascii=False))
+    if args.command == "run-once":
+        signal.alarm(0)
 
 
 if __name__ == "__main__":
