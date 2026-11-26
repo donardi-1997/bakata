@@ -60,6 +60,32 @@ class Pilot:
             raise PolicyError("Approval window exceeds seven days")
         if not self.reviewed_at < self.robots_valid_until <= self.reviewed_at + timedelta(hours=24):
             raise PolicyError("Robots review window exceeds 24 hours")
+        # Deliberately narrow subset: reject unsupported/malformed path rules;
+        # any matching Disallow in any group vetoes this pilot.
+        agents = 0
+        for line in self.robots_text.splitlines():
+            line = line.split("#",1)[0].strip()
+            if not line:
+                continue
+            key, sep, value = line.partition(":")
+            key, value = key.strip().lower(), value.strip()
+            if not sep or key not in ("user-agent","allow","disallow","crawl-delay","request-rate","sitemap"):
+                raise PolicyError("Unsupported robots directive; review required")
+            if key == "user-agent":
+                if not value:
+                    raise PolicyError("Missing robots user-agent")
+                agents += 1
+            if key in ("allow","disallow") and value:
+                if not value.startswith("/") or any(c in value for c in "*$%\\"):
+                    raise PolicyError("Complex robots path; review required")
+                if key == "disallow" and PATH.startswith(value):
+                    raise PolicyError("Matching robots disallow")
+            if key == "crawl-delay" and not re.fullmatch(r"[0-9]{1,5}",value):
+                raise PolicyError("Unsupported crawl-delay")
+            if key == "request-rate" and not re.fullmatch(r"[1-9][0-9]{0,4}/[1-9][0-9]{0,4}",value):
+                raise PolicyError("Unsupported request-rate")
+        if not agents:
+            raise PolicyError("Missing robots group")
         policy = SourcePolicy(self.host, True, self.robots_text, self.robots_valid_until)
         policy.validate(self.url)
         # A single GET with no retries; refuse unusual crawl policies rather than
