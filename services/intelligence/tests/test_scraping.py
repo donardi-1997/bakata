@@ -5,6 +5,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from intelligence.transport import Fetcher, SourcePolicy, Response, FetchError, PolicyError, public_ip
 from intelligence.extraction import extract_products
+from intelligence.engine import research_page
 
 
 class TransportTests(unittest.TestCase):
@@ -71,6 +72,13 @@ class TransportTests(unittest.TestCase):
             self.responses = [response]
             with self.assertRaises(FetchError):
                 self.fetcher().fetch(self.url)
+
+    def test_end_to_end_synthetic_page(self):
+        html = b'<script type="application/ld+json">{"@type":"Product","name":"Fixture","sku":"demo","offers":{"@type":"Offer","priceCurrency":"COP","price":"1000"}}</script>'
+        self.responses = [Response(200, {"content-type":"text/html"}, html)]
+        candidates = research_page(self.fetcher(), self.url)
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0].price_minor, 100000)
 
     def test_retry_budget(self):
         self.responses = [Response(503, {}, b"")]*3
