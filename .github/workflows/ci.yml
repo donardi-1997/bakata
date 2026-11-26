@@ -18,6 +18,10 @@ jobs:
           docker compose -f services/intelligence/compose.yaml build fixture
           docker compose -f services/intelligence/compose.yaml run --rm -T fixture python -m unittest discover -s tests -v
           docker compose -f services/intelligence/compose.yaml run --rm -T fixture
+      - name: Intelligence preview — Python to PHP snapshot contract
+        run: |
+          docker compose -f services/intelligence/compose.yaml run --rm -T fixture python -m intelligence.admin_export > /tmp/bakata-intelligence-preview.json
+          docker run --rm -i -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-intelligence-preview.php < /tmp/bakata-intelligence-preview.json
       - name: Validate PHP syntax
         run: docker run --rm -v "$PWD/wp-content:/src:ro" php:8.3-cli sh -c 'find /src -name "*.php" -exec php -l {} +'
       - name: Supplier foundation — isolated contract and preview tests
@@ -71,6 +75,15 @@ jobs:
         run: |
           npm --prefix qa install --ignore-scripts --no-audit --no-fund --package-lock=false
           qa/node_modules/.bin/playwright install --with-deps chromium
+      - name: Browser QA — administrator intelligence preview
+        env:
+          BAKATA_CI_FIXTURES: '1'
+        run: |
+          export BAKATA_CI_INTELLIGENCE_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::$BAKATA_CI_INTELLIGENCE_PASSWORD"
+          docker compose run --rm -T cli wp user create ci-bakata-intelligence-reader intelligence-reader@example.test --role=subscriber --user_pass="$BAKATA_CI_INTELLIGENCE_PASSWORD" --porcelain
+          node --check qa/intelligence-admin.mjs
+          node qa/intelligence-admin.mjs
       - name: Browser QA — empty catalog
         env:
           BAKATA_CI_FIXTURES: '1'
