@@ -121,6 +121,8 @@ jobs:
         run: |
           docker compose run --rm -T cli wp option update woocommerce_coming_soon no
           npm --prefix qa test
+          node --check qa/performance-seo.mjs
+          node qa/performance-seo.mjs
       - name: Browser QA — shop filters and pagination
         env:
           BAKATA_CI_FIXTURES: '1'

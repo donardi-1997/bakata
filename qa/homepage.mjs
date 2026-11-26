@@ -61,6 +61,19 @@ async function checkLayout(width) {
     if (await categoryCards.count()) {
       assert(await page.locator('.bk-category-nav a').count() > 0, 'Desktop category navigation missing');
       assert.equal(await page.locator('.bk-category-nav').isVisible(), width >= 1024);
+      if (width >= 1024) {
+        const mega = page.locator('.bk-mega');
+        const trigger = mega.locator('summary');
+        await trigger.focus();
+        await page.keyboard.press('Enter');
+        await visible(mega.locator('.bk-mega-panel'), 'Mega menu keyboard disclosure');
+        assert(await mega.locator('.bk-mega-heading').count() > 0);
+        for (const href of await mega.locator('a').evaluateAll(links => links.map(link => link.href))) {
+          assert.equal(new URL(href).origin, base.origin);
+        }
+        await page.keyboard.press('Enter');
+        assert(!(await mega.evaluate(el => el.open)), 'Mega menu did not close');
+      }
     }
     assert.equal(await page.locator('.bk-featured .bk-product-card').count(), mode === 'empty' ? 0 : 2);
     assert.equal(await page.locator('.bk-recent').count(), mode === 'empty' ? 0 : 1);
@@ -73,6 +86,13 @@ async function checkLayout(width) {
       for (const name of ['CI Featured Hidden', 'CI Featured Search Only', 'CI Featured Draft']) {
         assert.equal(await page.locator('.bk-product-title').filter({hasText:name}).count(), 0, 'Non-catalog product leaked: ' + name);
       }
+    }
+    assert.equal(await page.locator('.bk-collections').count(), mode === 'empty' ? 0 : 1);
+    if (mode === 'populated') {
+      const collection = page.locator('.bk-collection-card');
+      assert.equal(await collection.count(), 1, 'Exactly one link per configured editorial collection');
+      await visible(collection, 'Editorial collection');
+      assert.equal(new URL(await collection.getAttribute('href'), base).origin, base.origin);
     }
     assert.equal(await page.locator('.bk-catalog-empty').count(), mode === 'empty' ? 2 : 0);
     await page.locator('.bk-store-footer').scrollIntoViewIfNeeded();
@@ -120,7 +140,7 @@ async function checkLayout(width) {
     assert.equal(localFailures.length, 0, 'Local HTTP failures: ' + localFailures.join('; '));
     assert.equal(violations.length, 0, 'WCAG axe violations: ' + JSON.stringify(violations));
   } catch (error) {
-    failures.push({width, error: String(error)});
+    failures.push({width, error: String(error), stack: error.stack});
     await page.screenshot({path: output('failure-' + mode + '-' + width + '.png'), fullPage: true}).catch(() => {});
   } finally {
     await context.close();

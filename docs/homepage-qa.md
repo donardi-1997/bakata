@@ -19,3 +19,13 @@ Pendiente: Firefox/WebKit, dispositivos físicos, auditoría manual por lector d
 
 ## Correcciones de la primera ejecución
 El nombre accesible del botón conserva el texto visible completo al inicio (`Añadir al carrito: nombre`), según Label in Name. Se mantiene axe-core sin excepciones. La búsqueda prueba resultados múltiples y admite la redirección nativa de WooCommerce para una coincidencia exacta, verificando el producto de destino. Se conserva la comprobación real del carrito y su cantidad mediante Store API.
+
+## UX-09: presupuestos de recursos y SEO técnico
+
+El repositorio contiene una imagen hero WebP de 6.778 bytes y aproximadamente 58 KB de CSS de componentes (antes de las fases pendientes). Se fijan límites iniciales conservadores de 128 KiB para el hero y 96 KiB para el conjunto de hojas CSS del tema realmente enlazadas en la portada. Son tamaños de cuerpo HTTP decodificado, no bytes transferidos ni objetivos de Core Web Vitals. El control no abarca imágenes de catálogo, CSS de plugins ni JavaScript.
+
+El tema precarga únicamente Inter normal local en la portada si el archivo existe; se mantienen font-display: swap, dimensiones intrínsecas y prioridad alta de la imagen hero. No se desactivan scripts ni estilos de WooCommerce. La prueba qa/performance-seo.mjs comprueba estos contratos, los presupuestos y los recursos externos desde una instancia CI desechable.
+
+Se añade noindex a búsqueda, carrito, checkout y cuenta usando wp_robots, conservando los demás controles de WordPress. Noindex no sustituye autorización ni privacidad. No se emiten metadatos canónicos ni datos estructurados adicionales para evitar duplicar los de WordPress, WooCommerce o un plugin SEO.
+
+Lighthouse conserva su carácter diagnóstico. Objetivos de campo para revisión posterior: LCP <= 2,5 s, CLS <= 0,1 e INP <= 200 ms en percentil 75. No se afirma cumplimiento sin mediciones reales; los límites de recursos son iniciales y deberán revisarse con fotografías definitivas. Las auditorías axe existentes siguen siendo obligatorias; falta revisión manual de teclado, lector de pantalla, contraste y dispositivos físicos. No se modifica la configuración de indexación global del entorno.

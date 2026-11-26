@@ -142,8 +142,17 @@ async function run(width) {
     await row.waitFor({state:'visible'});
     const persisted=await waitCart(page,c=>c.items.some(i=>i.id===id&&i.quantity===2)&&c.coupons.some(x=>x.code===coupon),'Cart survives reload');
     assert.equal(persisted.totals.total_price,discounted.totals.total_price);
-    const checkout=page.locator('.wc-block-cart__submit-button');
+    // WooCommerce switches the native CTA to a sticky container while its
+    // reference is below the viewport, and hides that container on desktop.
+    // Scroll the persistent outer wrapper (not the hidden link) into view,
+    // just as a shopper would, then require the actual CTA to be actionable.
+    const submit=page.locator('.wc-block-cart__submit');
+    await submit.waitFor({state:'attached'});
+    assert.equal(await submit.count(),1,'One native checkout wrapper');
+    await submit.evaluate(el=>el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'}));
+    const checkout=submit.locator('.wc-block-cart__submit-button');
     await checkout.waitFor({state:'visible'});
+    await checkout.click({trial:true});
     const checkoutUrl=new URL(await checkout.getAttribute('href'),base);
     assert.equal(checkoutUrl.origin,base.origin);
     assert.notEqual(checkoutUrl.href,cartUrl.href);
@@ -157,7 +166,7 @@ async function run(width) {
     assert.equal(await page.locator('.wc-block-cart-items__row').count(),0);
     results.push({width,passed:true,quantity:2,currency:'COP',couponDiscount:5000,checkoutLink:checkoutUrl.pathname});
   } catch(error) {
-    failures.push({width,phase,error:String(error),url:page.url(),couponControls:await page.locator('.wc-block-components-totals-coupon').evaluateAll(nodes=>nodes.map(node=>Array.from(node.querySelectorAll('[role=button],button,input')).map(el=>({tag:el.tagName,role:el.getAttribute('role'),expanded:el.getAttribute('aria-expanded'),className:el.className,text:el.textContent?.trim().slice(0,100)})))).catch(()=>[]),mainText:(await page.locator('main').first().innerText({timeout:2000}).catch(()=>'' )).slice(0,1600)});
+    failures.push({width,phase,error:String(error),url:page.url(),checkoutLayout:await page.locator('.wc-block-cart__submit,.wc-block-cart__submit-container,.wc-block-cart__submit-button').evaluateAll(nodes=>nodes.map(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {className:el.className,display:s.display,visibility:s.visibility,top:Math.round(r.top),bottom:Math.round(r.bottom),height:Math.round(r.height),viewportHeight:innerHeight,scrollY};})).catch(()=>[]),couponControls:await page.locator('.wc-block-components-totals-coupon').evaluateAll(nodes=>nodes.map(node=>Array.from(node.querySelectorAll('[role=button],button,input')).map(el=>({tag:el.tagName,role:el.getAttribute('role'),expanded:el.getAttribute('aria-expanded'),className:el.className,text:el.textContent?.trim().slice(0,100)})))).catch(()=>[]),mainText:(await page.locator('main').first().innerText({timeout:2000}).catch(()=>'' )).slice(0,1600)});
     await page.screenshot({path:out('failure-cart-'+width+'.png'),fullPage:true}).catch(()=>{});
   } finally {await context.close();}
 }

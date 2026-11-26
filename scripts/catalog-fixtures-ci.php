@@ -12,6 +12,10 @@ $term = wp_insert_term('CI Category Alpha', 'product_cat', ['slug' => 'ci-catego
 if (is_wp_error($term)) {
     throw new RuntimeException($term->get_error_message());
 }
+$collection = wp_insert_term('CI Editorial Collection', 'product_tag', ['slug' => 'hogar-en-armonia']);
+if (is_wp_error($collection)) {
+    throw new RuntimeException($collection->get_error_message());
+}
 foreach ([
     ['CI Featured Visible', 'publish', 'visible', true, 'instock'],
     ['CI Featured Catalog Only', 'publish', 'catalog', true, 'instock'],
@@ -28,6 +32,7 @@ foreach ([
     $p->set_regular_price('129900');
     $p->set_stock_status($stock);
     $p->set_category_ids([(int) $term['term_id']]);
+    if ($name === 'CI Featured Visible') { $p->set_tag_ids([(int) $collection['term_id']]); }
     $p->save();
 }
 echo "Disposable CI catalog created.\n";
