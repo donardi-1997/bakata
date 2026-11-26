@@ -117,10 +117,21 @@ async function run(width) {
     if(foreignUrl.searchParams.has('view-order'))foreignUrl.searchParams.set('view-order',String(other));
     else foreignUrl.pathname=foreignUrl.pathname.replace(new RegExp('/'+own+'/?$'),'/'+other+'/');
     assert.notEqual(foreignUrl.href,ownUrl.href);
-    await page.goto(foreignUrl.href,{waitUntil:'load'});
-    await main.locator('.woocommerce-error').waitFor({state:'visible'});
-    assert(!(await main.innerText()).includes('CI Account Order other'),'Foreign order must not leak');
-    assert.equal(await main.locator('.woocommerce-order-details').count(),0);
+    const deniedResponse=await page.goto(foreignUrl.href,{waitUntil:'load'});
+    assert(deniedResponse?.ok(),'Native account error page rendered');
+    assert.equal(new URL(page.url()).href,foreignUrl.href,'Denial on requested order endpoint');
+    // WooCommerce selects block notices for block themes and classic notices
+    // for classic themes. Both expose role=alert; require the actual error.
+    const denial=content.getByRole('alert').filter({hasText:/Invalid order\./});
+    await denial.waitFor({state:'visible'});
+    assert.equal(await denial.count(),1,'One explicit native denial notice');
+    const returnLink=denial.getByRole('link',{name:'My account',exact:true});
+    assert.equal(new URL(await returnLink.getAttribute('href'),page.url()).href,account.href);
+    assert(await nav.isVisible(),'Customer remains authenticated');
+    assert.equal(await login.count(),0,'Denial is authorization, not authentication failure');
+    assert(!(await main.textContent()).includes('CI Account Order other'),'Foreign order must not leak, even in hidden markup');
+    assert(!(await main.textContent()).includes('ci-bakata-account-other@example.invalid'),'Foreign customer email must not leak');
+    assert.equal(await main.locator('.woocommerce-order-details,.woocommerce-customer-details,mark.order-number,tr.woocommerce-table__line-item').count(),0,'No foreign order or customer details');
     phase='profile';
     await follow(page,nav.locator('.woocommerce-MyAccount-navigation-link--edit-account a'));
     const profile=content.locator('form.woocommerce-EditAccountForm');
@@ -155,7 +166,7 @@ async function run(width) {
     assert.equal(await nav.count(),0);
     await page.goto(ownUrl.href,{waitUntil:'load'});
     await login.waitFor({state:'visible'});
-    assert(!(await main.innerText()).includes('CI Account Order own'),'Logged-out order must not leak');
+    assert(!(await main.textContent()).includes('CI Account Order own'),'Logged-out order must not leak, even in hidden markup');
     assert.equal(await main.locator('.woocommerce-order-details').count(),0);
     results.push({width,passed:true,ownOrder:true,foreignOrderDenied:true,profileSaved:true,addressSaved:true,loggedOut:true});
   } catch(error) {

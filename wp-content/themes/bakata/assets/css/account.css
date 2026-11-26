@@ -43,7 +43,7 @@
 .bk-account .woocommerce .button { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; max-width: 100%; padding: .65rem .9rem; border: 1px solid transparent; border-radius: var(--bk-radius-md); background: var(--bk-primary); color: var(--bk-on-primary); text-decoration: none; text-align: center; font: 600 1rem/1.4 var(--bk-body); white-space: normal; overflow-wrap: anywhere; }
 .bk-account .woocommerce .button:hover { background: var(--bk-primary-hover); color: var(--bk-on-primary); }
 .bk-account .woocommerce .button:disabled { background: var(--bk-surface-muted); color: var(--bk-text-muted); border-color: var(--bk-border); }
-.bk-account .woocommerce :is(.woocommerce-message,.woocommerce-info,.woocommerce-error) { box-sizing: border-box; max-width: 100%; overflow-wrap: anywhere; }
+.bk-account .woocommerce :is(.woocommerce-message,.woocommerce-info,.woocommerce-error,.wc-block-components-notice-banner) { box-sizing: border-box; max-width: 100%; overflow-wrap: anywhere; }
 .bk-account .woocommerce table.shop_table { width: 100%; max-width: 100%; table-layout: fixed; border-color: var(--bk-surface-muted); overflow-wrap: anywhere; }
 .bk-account .woocommerce table.shop_table :is(th,td) { min-width: 0; padding: .65rem; white-space: normal; overflow-wrap: anywhere; }
 .bk-account .woocommerce table.shop_table .nobr { white-space: normal; }

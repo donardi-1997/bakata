@@ -14,6 +14,7 @@ update_option('woocommerce_enable_myaccount_registration', 'yes');
 update_option('woocommerce_registration_generate_username', 'yes');
 update_option('woocommerce_registration_generate_password', 'yes');
 $ids = [];
+$customer_ids = [];
 foreach (['own', 'other'] as $kind) {
     $username = 'ci-bakata-account-' . $kind;
     $email = $username . '@example.invalid';
@@ -58,6 +59,28 @@ foreach (['own', 'other'] as $kind) {
     $order->calculate_totals(false);
     $order->save();
     $ids[$kind] = $order->get_id();
+    $customer_ids[$kind] = $id;
 }
+// Verify the real WooCommerce capability mapping independently of the DOM.
+// Do not grant any capability or filter the authorization result.
+$previous_user = get_current_user_id();
+try {
+    foreach (['own', 'other'] as $kind) {
+        $opposite = $kind === 'own' ? 'other' : 'own';
+        wp_set_current_user($customer_ids[$kind]);
+        if (!current_user_can('view_order', $ids[$kind])
+            || current_user_can('view_order', $ids[$opposite])) {
+            throw new RuntimeException('Fixture customer order isolation failed.');
+        }
+    }
+    wp_set_current_user(0);
+    if (current_user_can('view_order', $ids['own'])
+        || current_user_can('view_order', $ids['other'])) {
+        throw new RuntimeException('Guest order capability unexpectedly granted.');
+    }
+} finally {
+    wp_set_current_user($previous_user);
+}
+echo "Native order capability isolation verified.\n";
 echo 'BAKATA_CI_OWN_ORDER=' . $ids['own'] . "\n";
 echo 'BAKATA_CI_OTHER_ORDER=' . $ids['other'] . "\n";
