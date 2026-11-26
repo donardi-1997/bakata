@@ -19,3 +19,7 @@ Monolito modular: WordPress administra contenido y autenticación, WooCommerce a
 5. Colombia/COP y America/Bogota son valores iniciales de desarrollo, sujetos a confirmación comercial.
 6. No asumir disponibilidad o tiempos de entrega; validar con proveedor antes de publicar.
 7. Para producción, fijar versiones, configurar HTTPS, respaldos, actualizaciones, mínimos privilegios, privacidad y observabilidad.
+
+## Fase de proveedores iniciada
+
+Se implementan contratos PHP de catálogo y una previsualización acotada en memoria sin registrar proveedores ni modificar WooCommerce. La decisión 3 se mantiene: la conexión comercial requiere proveedor confirmado, contrato API y sandbox. Véase [base de proveedores](supplier-foundation.md).
