@@ -12,6 +12,23 @@ add_filter('page_template_hierarchy', static function (array $templates): array 
     return $templates;
 });
 
+/** Shared purchase progress, purely presentational and independent of cart session state. */
+function bakata_purchase_steps(string $stage): string {
+    if (!in_array($stage, ['cart', 'checkout'], true)) {
+        return '';
+    }
+    $steps = [
+        'cart' => __('Carrito', 'bakata'),
+        'checkout' => __('Datos y pago', 'bakata'),
+        'confirmation' => __('Confirmación', 'bakata'),
+    ];
+    $html = '<ol class="bk-purchase-steps" aria-label="' . esc_attr__('Progreso de compra', 'bakata') . '">';
+    foreach ($steps as $key => $label) {
+        $html .= '<li' . ($stage === $key ? ' aria-current="step"' : '') . '>' . esc_html($label) . '</li>';
+    }
+    return $html . '</ol>';
+}
+
 /** Keep a real route back to the catalog even when the cart is empty. */
 function bakata_cart_navigation(): string {
     if (!function_exists('is_cart') || !is_cart() || post_password_required()) {
@@ -21,7 +38,7 @@ function bakata_cart_navigation(): string {
     if (!$shop) {
         return '';
     }
-    return '<nav class="bk-cart-navigation" aria-label="' .
+    return bakata_purchase_steps('cart') . '<nav class="bk-cart-navigation" aria-label="' .
         esc_attr__('Navegación de compra', 'bakata') . '"><a class="bk-link" href="' .
         esc_url($shop) . '">' . esc_html__('Seguir explorando productos', 'bakata') . '</a></nav>';
 }
