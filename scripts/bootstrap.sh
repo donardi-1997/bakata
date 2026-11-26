@@ -5,6 +5,7 @@ if [[ ! -f .env ]]; then
   echo "Copia .env.example a .env y configura las contraseñas locales." >&2
   exit 1
 fi
+bash scripts/install-fonts.sh
 docker compose config --quiet
 docker compose up -d db wordpress
 for ((i=0; i<90; i++)); do

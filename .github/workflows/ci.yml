@@ -35,6 +35,12 @@ jobs:
           curl --fail --silent --show-error --retry 5 http://localhost:8080/ -o /tmp/bakata-home.html
           grep -F 'Descubre. Simplifica. Disfruta.' /tmp/bakata-home.html
           grep -F 'design-system.css' /tmp/bakata-home.html
+          grep -F 'bk-store-header' /tmp/bakata-home.html
+          grep -F 'logo-horizontal.svg' /tmp/bakata-home.html
+          grep -F 'name="post_type" value="product"' /tmp/bakata-home.html
+          grep -F 'fonts.css' /tmp/bakata-home.html
+          curl --fail --silent --show-error http://localhost:8080/wp-content/themes/bakata/assets/fonts/inter.woff2 -o /tmp/bakata-inter.woff2
+          test "$(git hash-object /tmp/bakata-inter.woff2)" = '5a8d3e72ad7ffb62af3b146e1b1f54ab5813a212'
           curl --fail --silent --show-error http://localhost:8080/wp-content/themes/bakata/assets/css/design-system.css -o /tmp/bakata-design-system.css
           grep -F -- '--bk-primary: #1F3A37' /tmp/bakata-design-system.css
       - name: Diagnostic logs

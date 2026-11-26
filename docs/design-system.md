@@ -29,7 +29,7 @@ Base de la homepage aprobada, Raíz contemporánea. **El catálogo y las promesa
 ## Accesibilidad y uso visual
 Texto normal >=4.5:1, controles y foco >=3:1 respecto al fondo como objetivos. Verde profundo con marfil es CTA principal; terracota original decorativo, variante oscura #8C4427 solo para texto de acento. No usar valoraciones, precios o envíos ficticios. Estados hover, focus-visible, disabled y error; respetar reduced-motion. Diseñar navegación por teclado y probar lectores de pantalla, zoom 200%, anchos 320/375/768/1024/1440. Los checks de contraste estáticos no certifican WCAG.
 
-La tipografía conserva fallback de sistema hasta instalar Plus Jakarta Sans e Inter con sus licencias y pesos. No se descargan fuentes externas. Las medidas de escala, colores auxiliares, radios e iconos son propuestas técnicas derivadas del diseño aprobado.
+Plus Jakarta Sans e Inter se sirven localmente tras ejecutar scripts/install-fonts.sh; las licencias OFL están versionadas. Se conserva fallback del sistema. No hay solicitudes a CDN de fuentes desde el navegador. Las medidas de escala, colores auxiliares, radios e iconos son propuestas técnicas derivadas del diseño aprobado.
 
 ## Próximos pasos
-Instalar fuentes locales licenciadas; construir header, hero, categorías y catálogo con APIs/bloques nativos; validar responsive y accesibilidad en navegador real. No cambia las plantillas de la homepage, logo activo o favicon activo en esta entrega.
+Construir hero, categorías y catálogo con APIs/bloques nativos; validar responsive y accesibilidad en navegador real. La cabecera y el favicon de fallback se documentan en docs/store-header.md.
