@@ -1,6 +1,6 @@
 # Evaluación de proveedor para Bakatá — ADR 001
 
-Fecha de revisión: 2026-11-26. Estado: propuesta, no aprobación comercial. Objetivo: Colombia, COP, WooCommerce, operación con control de catálogo, precios y despacho en Bakatá Core. No se han creado cuentas, instalado plugins externos, probado APIs autenticadas ni adquirido productos.
+Fecha de revisión: 2026-11-26. Estado: Dropi Colombia confirmado por el usuario como proveedor prioritario para evaluación; no constituye autorización de instalación, despacho ni contrato comercial. Objetivo: Colombia, COP, WooCommerce, operación con control de catálogo, precios y despacho en Bakatá Core. No se han creado cuentas, instalado plugins externos, probado APIs autenticadas ni adquirido productos.
 
 ## Evidencia pública y decisión provisional
 
@@ -48,4 +48,10 @@ No conectar producción hasta completar G0–G6. Para CJ, isSandbox debe fijarse
 
 ## Acción siguiente
 
-Confirmar Dropi como primer candidato y solicitar documentación/condiciones al canal comercial oficial comercial@dropi.co (contacto@dropi.co, WhatsApp +57 310 675 6608). No contactar ni contratar automáticamente. Si no ofrece API autorizada o pruebas sin efecto real, reevaluar CJ o Rocketfy. Compartir documentación no confidencial o ejemplos anonimizados; nunca pegar claves/tokens en issues, PR o Git. Mientras no se cumpla G0, mantener integración comercial deshabilitada.
+Con Dropi confirmado como primer candidato, solicitar documentación/condiciones al canal comercial oficial comercial@dropi.co (contacto@dropi.co, WhatsApp +57 310 675 6608). No contactar ni contratar automáticamente. Si no ofrece API autorizada o pruebas sin efecto real, reevaluar CJ o Rocketfy. Compartir documentación no confidencial o ejemplos anonimizados; nunca pegar claves/tokens en issues, PR o Git. Mientras no se cumpla G0, mantener integración comercial deshabilitada.
+
+## Confirmación del candidato y ruta Dropify (2026-11-26)
+
+El usuario confirma Dropi Colombia como candidato prioritario. [Integraciones de Dropi](https://dropi.co/integraciones) confirma generación de token al crear la tienda y configuración en Dropify para WooCommerce. El [directorio WordPress](https://wordpress.org/plugins/wc-dropi-integration/) identifica el slug wc-dropi-integration, versión 4.7.3, probado hasta WP 6.8.13, y describe importación de catálogo y generación automática de órdenes. No equivale a acceso autorizado a una API propia. El directorio advierte falta de pruebas con las tres versiones principales recientes de WordPress. Bakatá usa WordPress 7.1.5, WooCommerce 11.3.1 y PHP 8.3; validar compatibilidad real (HPOS y Checkout Blocks incluidos). Existe antecedente CVE-2025-53286 (XSS reflejado, [Tenable](https://www.tenable.com/cve/CVE-2025-53286) indica versiones hasta 4.7.2), y un [reporte de soporte no resuelto](https://wordpress.org/support/topic/security-vulnerability-in-dropify-4-7-3-request-for-a-fix/) para 4.7.3; no confirma vulnerabilidad en 4.7.3. Revisar código de la versión exacta y confirmar corrección con proveedor antes de uso.
+
+Ruta propuesta: revisar conector sin ejecución; levantar entorno descartable sin token ni acceso a producción, bloquear egress comercial, inspeccionar hooks, capacidades, almacenamiento de credenciales, cron, REST, HPOS, Checkout Blocks, importación a borrador y opción de desactivar envío automático. Después solicitar cuenta/token de prueba específico del entorno y autorización de pruebas sin efecto real. No activar ambos motores de despacho: un solo responsable por operación, con conciliación. Si Dropify no permite control suficiente, solicitar API autorizada o reevaluar. No almacenar tokens en Git, chats, logs ni comandos visibles. No se ha instalado el plugin ni conectado cuenta. Mantener G0 pendiente hasta contrato técnico y entorno de pruebas.
