@@ -73,20 +73,25 @@ function bakata_render_categories(): string {
 add_shortcode('bakata_categories', 'bakata_render_categories');
 
 /** Bounded queries through WooCommerce, respecting publication and catalog visibility. */
-function bakata_home_products(): array {
+function bakata_home_products(bool $featured = true, array $exclude = []): array {
     if (!function_exists('wc_get_products')) {
         return [];
     }
     $args = [
         'status' => 'publish',
         'visibility' => 'catalog',
-        'featured' => true,
         'limit' => 12,
         'orderby' => 'date',
         'order' => 'DESC',
         'return' => 'objects',
         'type' => ['simple', 'variable', 'grouped', 'external'],
     ];
+    if ($featured) {
+        $args['featured'] = true;
+    }
+    if ($exclude) {
+        $args['exclude'] = array_map('absint', $exclude);
+    }
     if ('yes' === get_option('woocommerce_hide_out_of_stock_items')) {
         $args['stock_status'] = ['instock', 'onbackorder'];
     }
@@ -100,22 +105,26 @@ function bakata_home_products(): array {
     return array_slice(array_values($products), 0, 4);
 }
 
-function bakata_render_featured_products(): string {
+function bakata_render_featured_products(bool $recent = false): string {
     if (!function_exists('wc_get_products')) {
         return '';
     }
-    $products = bakata_home_products();
+    $featured = bakata_home_products();
+    $products = $recent ? bakata_home_products(false, array_map(static fn ($product): int => $product->get_id(), $featured)) : $featured;
+    if ($recent && !$products) {
+        return '';
+    }
     $title = wp_unique_id('bk-featured-title-');
     $shop = bakata_catalog_shop_url();
     ob_start();
     ?>
-    <section class="bk-catalog-section bk-featured" aria-labelledby="<?php echo esc_attr($title); ?>">
+    <section class="bk-catalog-section <?php echo $recent ? 'bk-recent' : 'bk-featured'; ?>" aria-labelledby="<?php echo esc_attr($title); ?>">
       <div class="bk-section-heading">
-        <h2 class="bk-heading bk-h2" id="<?php echo esc_attr($title); ?>"><?php esc_html_e('Productos destacados', 'bakata'); ?></h2>
+        <h2 class="bk-heading bk-h2" id="<?php echo esc_attr($title); ?>"><?php echo $recent ? esc_html__('Recién llegados', 'bakata') : esc_html__('Productos destacados', 'bakata'); ?></h2>
         <?php if ($shop) : ?><a class="bk-link" href="<?php echo esc_url($shop); ?>"><?php esc_html_e('Ver todos los productos', 'bakata'); ?></a><?php endif; ?>
       </div>
       <?php if (!$products) : ?>
-        <p class="bk-catalog-empty"><?php esc_html_e('Todavía no hay productos destacados.', 'bakata'); ?></p>
+        <p class="bk-catalog-empty"><?php esc_html_e('Estamos preparando nuestra selección destacada.', 'bakata'); ?></p>
       <?php else : ?>
         <ul class="bk-grid bk-product-grid">
           <?php foreach ($products as $product) :
@@ -155,7 +164,8 @@ function bakata_render_featured_products(): string {
     <?php
     return (string) ob_get_clean();
 }
-add_shortcode('bakata_featured_products', 'bakata_render_featured_products');
+add_shortcode('bakata_featured_products', static fn (): string => bakata_render_featured_products());
+add_shortcode('bakata_recent_products', static fn (): string => bakata_render_featured_products(true));
 
 /**
  * Post/Redirect/Get for the homepage's native add-to-cart form.
