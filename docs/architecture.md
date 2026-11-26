@@ -35,3 +35,7 @@ DraftPlanner une la fuente normalizada con una cotización explícita. WooDraftI
 ## Reconciliación de inventario en modo lectura
 
 InventoryPreview distingue observaciones confirmadas, desconocidas, caducadas y conflictivas, y calcula una cantidad candidata bajo política explícita. WooInventoryPreview lee exclusivamente borradores mapeados mediante CRUD, sin escribir stock. Véase [previsualización de inventario](inventory-preview.md).
+
+## Preparación de pedidos
+
+OrderPreview agrupa líneas históricas con mapeos explícitos por proveedor y genera referencias estables y huellas separadas, sin escribir pedidos ni enviar órdenes. WooOrderPreview consulta mediante CRUD con permisos y reglas conservadoras de elegibilidad. Véase [preparación de pedidos](order-preview.md).
