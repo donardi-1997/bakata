@@ -15,7 +15,8 @@ jobs:
       - name: Validate theme JSON and shell
         run: |
           python3 -m json.tool wp-content/themes/bakata/theme.json > /dev/null
-          bash -n scripts/bootstrap.sh
+          for script in scripts/*.sh; do bash -n "$script"; done
+          sh -n infra/letsencrypt/reload-nginx.sh
           cp .env.example .env
           docker compose config --quiet
       - name: Bootstrap local store

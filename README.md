@@ -37,3 +37,7 @@ El bootstrap es repetible: no reinstala un WordPress existente. Los datos se con
 - `docs/roadmap.md`: alcance y criterios de aceptación.
 
 Las imágenes Docker usan etiquetas de desarrollo y WooCommerce se instala desde WordPress.org; antes de staging se deberán fijar versiones/digests y comprobar compatibilidad. No se incluyen plugins de proveedores, pagos reales, productos ni credenciales. Este entorno no está endurecido para producción.
+
+## Entorno remoto de desarrollo
+
+Ver [infraestructura, seguridad y despliegue](docs/infrastructure.md). No usar las configuraciones de desarrollo como producción.
