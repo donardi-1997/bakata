@@ -131,6 +131,7 @@ class ScoreResult:
     observation_key: tuple[str, str, str]
     rubric_version: str
     as_of: datetime
+    max_age: timedelta
     status: ScreeningStatus
     components: tuple[ScoreComponent, ...]
     coverage_pct: int
@@ -206,18 +207,18 @@ def evaluate(observation: Observation, economics: UnitEconomics | None,
         total = sum((c.points for c in components), Decimal(0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     status = ScreeningStatus.BLOCKED if blockers else (
         ScreeningStatus.REVIEW_READY if total is not None else ScreeningStatus.INCOMPLETE)
-    return ScoreResult(observation.key, RUBRIC_VERSION, as_of, status, tuple(components),
+    return ScoreResult(observation.key, RUBRIC_VERSION, as_of, max_age, status, tuple(components),
                        coverage, total, contribution, margin, tuple(blockers))
 
 
 def rank_review_ready(results: tuple[ScoreResult, ...]) -> tuple[ScoreResult, ...]:
-    """Rank complete, non-blocked results from the same rubric and evaluation instant."""
+    """Rank complete, non-blocked results from the same rubric, evaluation instant and freshness window."""
     if len(results) > 1000:
         raise ValueError("Ranking limited to 1000 candidates")
     identities = [r.observation_key[:2] for r in results]
     if len(set(identities)) != len(identities):
         raise ValueError("Use one observation per source identity")
-    if len({(r.rubric_version, r.as_of) for r in results}) > 1:
-        raise ValueError("Rank only a common rubric and evaluation instant")
+    if len({(r.rubric_version, r.as_of, r.max_age) for r in results}) > 1:
+        raise ValueError("Rank only a common rubric, evaluation instant and freshness window")
     return tuple(sorted((r for r in results if r.status is ScreeningStatus.REVIEW_READY and r.total is not None),
                         key=lambda r: (-r.total, r.observation_key)))
