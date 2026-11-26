@@ -59,6 +59,12 @@ async function run(width) {
     await page.locator('main.bk-checkout .wc-block-checkout__form').waitFor({state:'visible'});
     assert.equal(await page.getByRole('main').count(),1);
     assert.equal(await page.locator('main h1').count(),1);
+    const steps=page.locator('main .bk-purchase-steps');
+    assert.equal(await steps.count(),1,'Purchase progress rendered once');
+    assert.equal(await steps.locator('li').count(),3,'Three purchase stages');
+    assert.equal(await steps.locator('[aria-current=step]').count(),1,'Exactly one current stage');
+    assert.equal(await steps.locator('[aria-current=step]').innerText(),'Datos y pago');
+
     const back=page.getByRole('link',{name:'Volver al carrito',exact:true});
     assert.equal(new URL(await back.getAttribute('href'),base).href,cartUrl.href);
     phase='address';
