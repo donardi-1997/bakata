@@ -12,7 +12,7 @@ def patch_security(name, source):
     if name == 'clasess/models/TokenModel.php':
         for field, variable, fmt in [('token', 'token', '%s'), ('store', 'store', '%s'), ('id', 'id', '%d')]:
             pattern = r'\$wpdb->get_results\(\s*"SELECT \* FROM " \. \$this->table_name \. " WHERE ' + field + r""" = '" \. \$""" + variable + r""" \. "'" ?,\s*OBJECT\s*\)"""
-            replacement = f'$wpdb->get_results($wpdb->prepare("SELECT * FROM " . $this->table_name . " WHERE {field} = {fmt}", \${variable}), OBJECT)'
+            replacement = f'$wpdb->get_results($wpdb->prepare("SELECT * FROM " . $this->table_name . " WHERE {field} = {fmt}", ${variable}), OBJECT)'
             source, count = re.subn(pattern, lambda _: replacement, source)
             if count != 1:
                 raise ValueError("Unexpected token lookup: " + field)
