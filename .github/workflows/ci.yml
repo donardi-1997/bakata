@@ -19,6 +19,7 @@ jobs:
           python3 -m json.tool wp-content/themes/bakata/theme.json > /dev/null
           for script in scripts/*.sh; do bash -n "$script"; done
           sh -n infra/letsencrypt/reload-nginx.sh
+          python3 -m py_compile scripts/upload-backup.py
           cp .env.example .env
           docker compose config --quiet
       - name: Bootstrap local store
