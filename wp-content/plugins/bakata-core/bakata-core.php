@@ -28,6 +28,11 @@ require_once __DIR__ . '/src/Fulfillment/FulfillmentPreview.php';
 require_once __DIR__ . '/src/Webhooks/SignedEvent.php';
 require_once __DIR__ . '/src/Webhooks/ReceiptLedger.php';
 require_once __DIR__ . '/src/Webhooks/WebhookInbox.php';
+require_once __DIR__ . '/src/Intelligence/PreviewSnapshot.php';
+require_once __DIR__ . '/src/Intelligence/AdminPanel.php';
+require_once __DIR__ . '/src/Intelligence/DraftBridge.php';
+
+Intelligence\AdminPanel::register();
 
 add_action('before_woocommerce_init', static function (): void {
     if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
