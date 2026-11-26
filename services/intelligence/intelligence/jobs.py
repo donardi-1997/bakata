@@ -7,6 +7,7 @@ import sqlite3
 import re
 
 MAX_JOBS = 1000
+MAX_DB_BYTES = 320 * 1024 * 1024
 MAX_ATTEMPTS = 3
 LEASE_SECONDS = 60
 MAX_RESULT_BYTES = 262144
@@ -41,6 +42,14 @@ class JobQueue:
         self.db = db
         self.db.execute("PRAGMA busy_timeout=5000")
         self.db.execute("PRAGMA foreign_keys=ON")
+        # Bound the main SQLite file, not journal/temp/backup disk usage.
+        page_size = self.db.execute("PRAGMA page_size").fetchone()[0]
+        page_limit = MAX_DB_BYTES // page_size
+        if self.db.execute("PRAGMA page_count").fetchone()[0] > page_limit:
+            raise ValueError("Queue database exceeds storage budget")
+        actual = self.db.execute(f"PRAGMA max_page_count={page_limit}").fetchone()[0]
+        if actual > page_limit:
+            raise ValueError("Cannot enforce queue storage budget")
         self.db.executescript("""
         CREATE TABLE IF NOT EXISTS int_jobs (
             id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind='fixture-snapshot'),
