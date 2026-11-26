@@ -5,6 +5,7 @@ import hashlib
 import re
 import zipfile
 from pathlib import Path
+from dropify_security_patch import patch_security
 
 SHA = 'bf23c6b1c5dd640aab3d38e3f370a41fbd60139ac60a1ce5f0347a059e9b6700'
 ROOT = 'wc-dropi-integration/'
@@ -66,7 +67,7 @@ def patch(name, source):
         if count != 27:
             raise ValueError(f'Unexpected order log count: {count}')
         source = replace(source, 'echo $e->getMessage();', '')
-    return source
+    return patch_security(name, source)
 
 
 def build(original, output):
