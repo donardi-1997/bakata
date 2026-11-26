@@ -154,6 +154,31 @@ function bakata_render_taxonomy_intro(): string {
 }
 add_shortcode('bakata_taxonomy_intro', 'bakata_render_taxonomy_intro');
 
+/** Refine a product search without changing WooCommerce's native query. */
+function bakata_render_search_intro(): string {
+    if (!is_search() || !is_post_type_archive('product') || !function_exists('is_shop')) {
+        return '';
+    }
+    $query = get_search_query(false);
+    $id = wp_unique_id('bk-search-refine-');
+    $shop = bakata_catalog_shop_url();
+    ob_start();
+    ?>
+    <div class="bk-search-intro">
+      <p class="bk-taxonomy-eyebrow"><?php esc_html_e('ENCUENTRA TU PRÓXIMO FAVORITO', 'bakata'); ?></p>
+      <p class="bk-heading bk-taxonomy-title"><?php esc_html_e('Encuentra lo que buscas', 'bakata'); ?></p>
+      <form class="bk-search-refine" role="search" aria-label="<?php esc_attr_e('Refinar búsqueda de productos', 'bakata'); ?>" method="get" action="<?php echo esc_url(home_url('/')); ?>">
+        <label class="bk-label" for="<?php echo esc_attr($id); ?>"><?php esc_html_e('Buscar en el catálogo', 'bakata'); ?></label>
+        <div class="bk-search-refine-row"><input class="bk-field" type="search" name="s" id="<?php echo esc_attr($id); ?>" value="<?php echo esc_attr($query); ?>" required><button class="bk-button" type="submit"><?php esc_html_e('Buscar productos', 'bakata'); ?></button></div>
+        <input type="hidden" name="post_type" value="product">
+      </form>
+      <?php if ($shop) : ?><a class="bk-link" href="<?php echo esc_url($shop); ?>"><?php esc_html_e('Explorar todo el catálogo', 'bakata'); ?></a><?php endif; ?>
+    </div>
+    <?php
+    return (string) ob_get_clean();
+}
+add_shortcode('bakata_search_intro', 'bakata_render_search_intro');
+
 // Limit the standard archive page size. No separate WP_Query or direct SQL.
 add_action('woocommerce_product_query', static function ($query): void {
     if ($query instanceof WP_Query && $query->is_main_query()) {
