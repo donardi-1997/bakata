@@ -87,6 +87,13 @@ async function checkLayout(width) {
         assert.equal(await page.locator('.bk-product-title').filter({hasText:name}).count(), 0, 'Non-catalog product leaked: ' + name);
       }
     }
+    assert.equal(await page.locator('.bk-collections').count(), mode === 'empty' ? 0 : 1);
+    if (mode === 'populated') {
+      const collection = page.locator('.bk-collection-card');
+      assert.equal(await collection.count(), 1);
+      await visible(collection, 'Editorial collection');
+      assert.equal(new URL(await collection.getAttribute('href'), base).origin, base.origin);
+    }
     assert.equal(await page.locator('.bk-catalog-empty').count(), mode === 'empty' ? 2 : 0);
     await page.locator('.bk-store-footer').scrollIntoViewIfNeeded();
     await page.locator('.bk-hero').scrollIntoViewIfNeeded();
