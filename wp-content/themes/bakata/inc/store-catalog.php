@@ -75,6 +75,50 @@ function bakata_render_categories(): string {
 }
 add_shortcode('bakata_categories', 'bakata_render_categories');
 
+/** Editorial collections are explicit WooCommerce product tags, never invented offers. */
+function bakata_render_home_collections(): string {
+    if (!taxonomy_exists('product_tag')) {
+        return '';
+    }
+    $themes = [
+        'hogar-en-armonia' => [__('Hogar en armonía', 'bakata'), __('Ideas para disfrutar y organizar tu espacio.', 'bakata')],
+        'rutina-inteligente' => [__('Rutina inteligente', 'bakata'), __('Soluciones prácticas para cada día.', 'bakata')],
+        'tiempo-para-ti' => [__('Tiempo para ti', 'bakata'), __('Encuentra pequeños momentos de bienestar.', 'bakata')],
+    ];
+    $terms = get_terms(['taxonomy' => 'product_tag', 'slug' => array_keys($themes), 'hide_empty' => true]);
+    if (is_wp_error($terms) || !$terms) {
+        return '';
+    }
+    $items = [];
+    foreach ($terms as $term) {
+        $url = get_term_link($term);
+        if (!is_wp_error($url) && isset($themes[$term->slug])) {
+            $items[$term->slug] = $url;
+        }
+    }
+    if (!$items) {
+        return '';
+    }
+    $id = wp_unique_id('bk-collections-');
+    ob_start();
+    ?>
+    <section class="bk-catalog-section bk-collections" aria-labelledby="<?php echo esc_attr($id); ?>">
+      <div class="bk-section-heading">
+        <h2 class="bk-heading bk-h2" id="<?php echo esc_attr($id); ?>"><?php esc_html_e('Ideas para vivir mejor', 'bakata'); ?></h2>
+      </div>
+      <ul class="bk-collection-grid">
+        <?php foreach ($themes as $slug => [$title, $description]) :
+            if (!isset($items[$slug])) { continue; }
+        ?>
+          <li><a class="bk-collection-card" href="<?php echo esc_url($items[$slug]); ?>"><span class="bk-heading bk-collection-title"><?php echo esc_html($title); ?></span><span class="bk-collection-description"><?php echo esc_html($description); ?></span><span class="bk-collection-action" aria-hidden="true"><?php esc_html_e('Descubrir colección', 'bakata'); ?> &#8594;</span></a></li>
+        <?php endforeach; ?>
+      </ul>
+    </section>
+    <?php
+    return (string) ob_get_clean();
+}
+add_shortcode('bakata_home_collections', 'bakata_render_home_collections');
+
 /** Bounded queries through WooCommerce, respecting publication and catalog visibility. */
 function bakata_home_products(bool $featured = true, array $exclude = []): array {
     if (!function_exists('wc_get_products')) {
