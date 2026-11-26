@@ -18,6 +18,15 @@ jobs:
           docker compose -f services/intelligence/compose.yaml build fixture
           docker compose -f services/intelligence/compose.yaml run --rm -T fixture python -m unittest discover -s tests -v
           docker compose -f services/intelligence/compose.yaml run --rm -T fixture
+      - name: Intelligence jobs — persistent offline scheduler smoke
+        run: |
+          docker compose -f services/intelligence/compose.yaml --profile jobs config --quiet
+          docker compose -f services/intelligence/compose.yaml --profile jobs build scheduler
+          docker compose -f services/intelligence/compose.yaml run --rm -T scheduler enqueue ci-fixture --due 0
+          docker compose -f services/intelligence/compose.yaml run --rm -T scheduler run-once
+          docker compose -f services/intelligence/compose.yaml run --rm -T scheduler list | python3 -c 'import sys,json; rows=json.load(sys.stdin); assert len(rows)==1 and rows[0]["status"]=="succeeded" and rows[0]["attempts"]==1'
+          docker compose -f services/intelligence/compose.yaml run --rm -T scheduler result ci-fixture > /tmp/bakata-job-result.json
+          python3 -c 'import json; s=json.load(open("/tmp/bakata-job-result.json")); assert s["mode"]=="fixture" and s["rows"][0]["score_bp"]==7777'
       - name: Intelligence preview — Python to PHP snapshot contract
         run: |
           docker compose -f services/intelligence/compose.yaml run --rm -T fixture python -m intelligence.admin_export > /tmp/bakata-intelligence-preview.json
@@ -226,7 +235,9 @@ jobs:
         run: docker compose logs --tail=100
       - name: Clean up
         if: always()
-        run: docker compose down -v
+        run: |
+          docker compose down -v
+          docker compose -f services/intelligence/compose.yaml --profile jobs down -v
   deploy_dev:
     needs: checks
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected && vars.BAKATA_CD_ENABLED == 'true'
