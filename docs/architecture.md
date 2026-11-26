@@ -23,3 +23,7 @@ Monolito modular: WordPress administra contenido y autenticación, WooCommerce a
 ## Fase de proveedores iniciada
 
 Se implementan contratos PHP de catálogo y una previsualización acotada en memoria sin registrar proveedores ni modificar WooCommerce. La decisión 3 se mantiene: la conexión comercial requiere proveedor confirmado, contrato API y sandbox. Véase [base de proveedores](supplier-foundation.md).
+
+## Simulación de precios
+
+Bakatá Core incluye un módulo Pricing puro que recibe costos y política explícitos, calcula contribución y propone un precio de escenario sin escribir en WooCommerce. No reemplaza impuestos, pagos ni configuración comercial. Véase [previsualización de precios](pricing-preview.md).
