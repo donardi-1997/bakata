@@ -112,3 +112,43 @@ add_action('woocommerce_product_query', static function ($query): void {
         $query->set('posts_per_page', 12);
     }
 });
+
+/**
+ * The enclosing Bakatá block template already owns the main landmark.
+ * Suppress only WooCommerce's default structural wrappers while rendering
+ * the native archive block; retain every other hook and restore afterwards.
+ */
+function bakata_render_shop_archive(): string {
+    if (!function_exists('is_shop') || !function_exists('is_product_taxonomy')
+        || !(is_shop() || is_product_taxonomy() || (is_search() && is_post_type_archive('product')))) {
+        return '';
+    }
+    if (!WP_Block_Type_Registry::get_instance()->is_registered('woocommerce/legacy-template')) {
+        return '';
+    }
+    $wrappers = [
+        'woocommerce_before_main_content' => 'woocommerce_output_content_wrapper',
+        'woocommerce_after_main_content' => 'woocommerce_output_content_wrapper_end',
+    ];
+    $removed = [];
+    foreach ($wrappers as $hook => $callback) {
+        $priority = has_action($hook, $callback);
+        if (false !== $priority && remove_action($hook, $callback, $priority)) {
+            $removed[] = [$hook, $callback, $priority];
+        }
+    }
+    try {
+        return render_block([
+            'blockName' => 'woocommerce/legacy-template',
+            'attrs' => ['template' => 'archive-product'],
+            'innerBlocks' => [],
+            'innerHTML' => '',
+            'innerContent' => [],
+        ]);
+    } finally {
+        foreach ($removed as [$hook, $callback, $priority]) {
+            add_action($hook, $callback, $priority);
+        }
+    }
+}
+add_shortcode('bakata_shop_archive', 'bakata_render_shop_archive');

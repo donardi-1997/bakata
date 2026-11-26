@@ -8,3 +8,6 @@ Pendiente: filtros de atributos (requieren taxonomías de inventario reales), in
 
 ## QA de integración con la búsqueda
 La prueba de homepage ahora verifica el título exacto dentro de cada tarjeta nativa y su enlace de producto, en vez del nombre accesible exacto del enlace que también puede incluir el precio. Se conserva la comprobación de exclusión de productos y el flujo de carrito. Los fallos incluyen URL y texto principal de la página de fixture para diagnosticar regresiones.
+
+## Corrección semántica del archivo
+WooCommerce 11.3.1 añade un main propio en sus wrappers clásicos. Las cuatro plantillas conservan el main exterior y renderizan el bloque legacy-template mediante bakata_shop_archive. El shortcode suspende exclusivamente los dos callbacks de wrapper nativos durante esa representación y los restaura en finally. Se mantienen los demás hooks, resultados, avisos, ordenamiento, paginación y lógica comercial. La prueba exige un único landmark main y filtros dentro del mismo, además de la ausencia de main anidado. No se cambia el comportamiento de las fichas individuales.

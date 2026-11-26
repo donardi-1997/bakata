@@ -24,6 +24,8 @@ async function run(width) {
     const cards = page.locator('.bk-shop ul.products li.product');
     assert.equal(await cards.count(),12,'Native first page size');
     assert.equal(await page.locator('.bk-shop main').count(),0,'No nested main');
+    assert.equal(await page.getByRole('main').count(),1,'Exactly one main landmark');
+    assert.equal(await page.locator('main.bk-shop .bk-shop-filters').count(),1,'Filters inside main');
     assert.equal(await page.locator('main h1').count(),1,'Catalog H1');
     const category = page.locator('.bk-shop-categories').getByRole('link',{name:'CI QA Shop Beta',exact:true});
     await category.click();
@@ -57,7 +59,7 @@ async function run(width) {
     await page.screenshot({path:output('shop-'+width+'.png'),fullPage:true});
     results.push({width,passed:true});
   } catch(error) {
-    failures.push({width,error:String(error)});
+    failures.push({width,error:String(error),url:page.url(),mainText:(await page.locator('main').first().innerText({timeout:2000}).catch(()=>'' )).slice(0,1800)});
     await page.screenshot({path:output('failure-shop-'+width+'.png'),fullPage:true}).catch(()=>{});
   } finally { await context.close(); }
 }
