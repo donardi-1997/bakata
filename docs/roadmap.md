@@ -24,3 +24,8 @@
 - [ ] Staging y pruebas extremo a extremo.
 - [ ] Producción segura, dominio, analítica y monitorización.
 - [ ] Lanzamiento controlado con catálogo pequeño.
+
+## Puerta Dropi
+- [x] Cuenta y token generados por el usuario (sin compartir credenciales).
+- [x] Revisión estática inicial del conector oficial 4.7.3.
+- [ ] Remediación del conector o contrato de API propio autorizado; pruebas aisladas y sandbox.

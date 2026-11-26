@@ -51,3 +51,7 @@ SignedEvent define un protocolo HMAC interno de referencia, WebhookInbox valida 
 ## Evaluación de proveedor
 
 El [ADR 001](provider-evaluation.md) registra Dropi Colombia como candidato prioritario confirmado por el usuario y mantiene CJdropshipping y Rocketfy como alternativas. El método de integración, la autorización operativa y el contrato API/sandbox siguen pendientes; no se implementa adapter real sin completar G0. No hay cambios de runtime en esta evaluación.
+
+## Revisión del conector Dropify
+
+[Revisión estática de Dropify 4.7.3](dropify-security-review.md): instalación y token bloqueados hasta remediar hallazgos y validar compatibilidad y sandbox. No se implementa ni activa integración comercial.
