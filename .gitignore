@@ -20,3 +20,7 @@ vendor/
 .DS_Store
 .idea/
 .vscode/
+
+# Reproducible upstream fonts, provisioned locally by scripts/install-fonts.sh
+/wp-content/themes/bakata/assets/fonts/*.woff2
+/wp-content/themes/bakata/assets/fonts/.download.*/

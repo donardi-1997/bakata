@@ -61,6 +61,16 @@
           "slug": "system",
           "name": "Sistema",
           "fontFamily": "system-ui, sans-serif"
+        },
+        {
+          "slug": "jakarta",
+          "name": "Plus Jakarta Sans",
+          "fontFamily": "\"Plus Jakarta Sans\", system-ui, sans-serif"
+        },
+        {
+          "slug": "inter",
+          "name": "Inter",
+          "fontFamily": "Inter, system-ui, sans-serif"
         }
       ],
       "fontSizes": [
@@ -156,7 +166,7 @@
       "text": "var:preset|color|carbon"
     },
     "typography": {
-      "fontFamily": "var:preset|font-family|system",
+      "fontFamily": "var:preset|font-family|inter",
       "fontSize": "1rem",
       "lineHeight": "1.6"
     },
@@ -185,6 +195,12 @@
         },
         "typography": {
           "fontWeight": "600"
+        }
+      },
+      "heading": {
+        "typography": {
+          "fontFamily": "var:preset|font-family|jakarta",
+          "fontWeight": "700"
         }
       }
     }
