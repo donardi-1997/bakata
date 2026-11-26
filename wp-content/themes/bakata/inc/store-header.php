@@ -23,6 +23,16 @@ function bakata_render_store_header(): string {
     if ($shop && $shop !== $home) {
         $links[$shop] = __('Tienda', 'bakata');
     }
+    $category_links = [];
+    if (taxonomy_exists('product_cat')) {
+        $categories = get_terms(['taxonomy' => 'product_cat', 'parent' => 0, 'hide_empty' => true, 'exclude' => [(int) get_option('default_product_cat')], 'number' => 9, 'orderby' => 'name']);
+        if (!is_wp_error($categories)) {
+            foreach ($categories as $category) {
+                $url = get_term_link($category);
+                if (!is_wp_error($url)) { $category_links[$url] = $category->name; }
+            }
+        }
+    }
     $current_search = is_search() ? get_search_query(false) : '';
     $search_id = wp_unique_id('bk-search-');
     ob_start();
@@ -36,6 +46,7 @@ function bakata_render_store_header(): string {
             <?php foreach ($links as $url => $label) : ?>
               <a href="<?php echo esc_url($url); ?>"><?php echo esc_html($label); ?></a>
             <?php endforeach; ?>
+            <?php foreach ($category_links as $url => $label) : ?><a href="<?php echo esc_url($url); ?>"><?php echo esc_html($label); ?></a><?php endforeach; ?>
             <?php if ($account) : ?><a href="<?php echo esc_url($account); ?>"><?php esc_html_e('Mi cuenta', 'bakata'); ?></a><?php endif; ?>
           </nav>
         </details>
@@ -62,6 +73,11 @@ function bakata_render_store_header(): string {
           <?php endif; ?>
         </div>
       </div>
+      <?php if ($category_links) : ?>
+        <nav class="bk-category-nav" aria-label="<?php esc_attr_e('Categorías de productos', 'bakata'); ?>">
+          <?php foreach ($category_links as $url => $label) : ?><a href="<?php echo esc_url($url); ?>"><?php echo esc_html($label); ?></a><?php endforeach; ?>
+        </nav>
+      <?php endif; ?>
     </div>
     <?php
     return (string) ob_get_clean();
