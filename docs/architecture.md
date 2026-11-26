@@ -43,3 +43,7 @@ OrderPreview agrupa líneas históricas con mapeos explícitos por proveedor y g
 ## Fulfillment y seguimiento logístico
 
 FulfillmentPreview reproduce historias de eventos normalizados por grupo de OrderPreview y agrega estados logísticos sin modificar pago, stock ni estado de WooCommerce. No es un receptor de webhooks ni una operación persistente. Véase [previsualización de fulfillment](fulfillment-preview.md).
+
+## Recibos de webhooks
+
+SignedEvent define un protocolo HMAC interno de referencia, WebhookInbox valida vinculaciones de grupos y WpReceiptLedger deduplica recibos mediante una clave única en tabla propia. No se registra un endpoint ni se procesa el efecto comercial. Véase [recibos de webhooks](webhook-receipts.md).
