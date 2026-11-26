@@ -8,6 +8,7 @@ x-wordpress-env: &wordpress-env
 services:
   db:
     image: mariadb:11.4
+    restart: unless-stopped
     environment:
       MARIADB_DATABASE: ${DB_NAME:?}
       MARIADB_USER: ${DB_USER:?}
@@ -22,6 +23,7 @@ services:
       retries: 30
   wordpress:
     image: wordpress:php8.3-apache
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
