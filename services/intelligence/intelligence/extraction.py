@@ -21,7 +21,7 @@ class JsonLdParser(HTMLParser):
         self.buffer = None
 
     def handle_starttag(self, tag, attrs):
-        if tag == "script" and dict(attrs).get("type", "").lower() == "application/ld+json" and len(self.documents) < 20:
+        if tag == "script" and (dict(attrs).get("type") or "").lower() == "application/ld+json" and len(self.documents) < 20:
             self.buffer = []
 
     def handle_data(self, data):
