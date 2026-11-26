@@ -1,0 +1,91 @@
+{
+  "version": 3,
+  "settings": {
+    "appearanceTools": true,
+    "layout": {
+      "contentSize": "760px",
+      "wideSize": "1200px"
+    },
+    "color": {
+      "palette": [
+        {
+          "slug": "ink",
+          "name": "Carbón",
+          "color": "#171717"
+        },
+        {
+          "slug": "paper",
+          "name": "Marfil",
+          "color": "#F5F3EE"
+        },
+        {
+          "slug": "white",
+          "name": "Blanco",
+          "color": "#FFFFFF"
+        },
+        {
+          "slug": "accent",
+          "name": "Lima",
+          "color": "#C4F04D"
+        }
+      ]
+    },
+    "typography": {
+      "fontFamilies": [
+        {
+          "slug": "system",
+          "name": "Sistema",
+          "fontFamily": "system-ui, sans-serif"
+        }
+      ]
+    }
+  },
+  "styles": {
+    "color": {
+      "background": "#FFFFFF",
+      "text": "#171717"
+    },
+    "typography": {
+      "fontFamily": "var:preset|font-family|system",
+      "fontSize": "1rem",
+      "lineHeight": "1.6"
+    },
+    "spacing": {
+      "padding": {
+        "left": "clamp(1rem, 4vw, 3rem)",
+        "right": "clamp(1rem, 4vw, 3rem)"
+      }
+    },
+    "elements": {
+      "button": {
+        "color": {
+          "background": "#171717",
+          "text": "#FFFFFF"
+        },
+        "border": {
+          "radius": "0.4rem"
+        },
+        "spacing": {
+          "padding": {
+            "top": "0.8rem",
+            "bottom": "0.8rem",
+            "left": "1.4rem",
+            "right": "1.4rem"
+          }
+        }
+      }
+    }
+  },
+  "templateParts": [
+    {
+      "name": "header",
+      "title": "Cabecera",
+      "area": "header"
+    },
+    {
+      "name": "footer",
+      "title": "Pie de página",
+      "area": "footer"
+    }
+  ]
+}

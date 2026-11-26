@@ -1,0 +1,35 @@
+name: Foundation checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate PHP syntax
+        run: docker run --rm -v "$PWD/wp-content:/src:ro" php:8.3-cli sh -c 'find /src -name "*.php" -exec php -l {} +'
+      - name: Validate theme JSON and shell
+        run: |
+          python3 -m json.tool wp-content/themes/bakata/theme.json > /dev/null
+          bash -n scripts/bootstrap.sh
+          cp .env.example .env
+          docker compose config --quiet
+      - name: Bootstrap local store
+        run: bash scripts/bootstrap.sh
+      - name: Smoke test
+        run: |
+          docker compose run --rm -T cli wp core is-installed
+          docker compose run --rm -T cli wp plugin is-active woocommerce
+          docker compose run --rm -T cli wp plugin is-active bakata-core
+          docker compose run --rm -T cli wp theme is-active bakata
+          curl --fail --silent --show-error --retry 5 http://localhost:8080/ | grep -F 'Descubre. Simplifica. Disfruta.'
+      - name: Diagnostic logs
+        if: failure()
+        run: docker compose logs --tail=100
+      - name: Clean up
+        if: always()
+        run: docker compose down -v

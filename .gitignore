@@ -1,0 +1,22 @@
+# Credenciales y datos privados
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.sql
+*.sql.gz
+*.log
+wp-config.php
+wp-content/uploads/
+wp-content/cache/
+wp-content/upgrade/
+wp-content/plugins/*
+!wp-content/plugins/bakata-core/
+wp-content/themes/*
+!wp-content/themes/bakata/
+node_modules/
+vendor/
+.DS_Store
+.idea/
+.vscode/
