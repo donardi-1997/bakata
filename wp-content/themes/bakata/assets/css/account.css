@@ -67,3 +67,27 @@
   .bk-account .woocommerce table.shop_table .button { font-size: var(--bk-size-small); padding-inline: .5rem; }
   .bk-account .woocommerce table.shop_table_responsive tr :is(th,td)::before { max-width: 50%; overflow-wrap: anywhere; }
 }
+
+/* WC 11.3.1 uses a row-header TH for the order number, but its legacy
+ * small-screen stylesheet hides tbody TH in responsive tables. Keep the
+ * native order link visible, including at the inclusive 768px breakpoint. */
+@media (max-width: 768px) {
+  .bk-account .woocommerce table.woocommerce-orders-table.shop_table_responsive tbody th.woocommerce-orders-table__cell-order-number {
+    display: block;
+    text-align: start;
+    width: auto;
+    box-sizing: border-box;
+  }
+  .bk-account .woocommerce table.woocommerce-orders-table.shop_table_responsive tbody th.woocommerce-orders-table__cell-order-number a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .bk-account .woocommerce table.woocommerce-orders-table.shop_table_responsive tbody th.woocommerce-orders-table__cell-order-number::before {
+    content: attr(data-title) ": ";
+    font-weight: 700;
+    margin-inline-end: .35rem;
+  }
+}

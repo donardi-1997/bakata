@@ -19,7 +19,11 @@ const tags=['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa'];
 async function follow(page,link) {
   const url=new URL(await link.getAttribute('href'),page.url());
   assert.equal(url.origin,base.origin);
-  await Promise.all([page.waitForURL(u=>u.href===url.href,{waitUntil:'load'}),link.click()]);
+  // Fail on a hidden control directly, rather than masking the click error
+  // with a concurrent navigation timeout. All links must be user actionable.
+  await link.waitFor({state:'visible'});
+  await link.click();
+  await page.waitForURL(u=>u.href===url.href,{waitUntil:'domcontentloaded'});
   await page.locator('main.bk-account').waitFor({state:'visible'});
   return url;
 }
@@ -84,10 +88,29 @@ async function run(width) {
     await rows.first().waitFor({state:'visible'});
     assert.equal(await rows.count(),1,'Only own historical order');
     const ownLink=rows.first().locator('.woocommerce-orders-table__cell-order-number a');
+    await ownLink.waitFor({state:'visible'});
+    const listedUrl=new URL(await ownLink.getAttribute('href'),page.url());
+    assert(listedUrl.pathname.endsWith('/'+own+'/')||listedUrl.searchParams.get('view-order')===String(own),'Own order ID in list');
+    await page.screenshot({path:out('account-orders-'+width+'.png'),fullPage:true});
+    phase='order-detail';
     const ownUrl=await follow(page,ownLink);
-    assert(ownUrl.pathname.endsWith('/'+own+'/')||ownUrl.searchParams.get('view-order')===String(own),'Own order ID');
-    await content.getByText('CI Account Order own',{exact:true}).waitFor({state:'visible'});
-    assert.equal(await content.getByText('CI Account Order other',{exact:true}).count(),0);
+    const details=content.locator('.woocommerce-order-details');
+    await details.waitFor({state:'visible'});
+    assert.equal((await content.locator('mark.order-number').innerText()).trim(),String(own),'Own order ID in detail');
+    const line=details.locator('tr.woocommerce-table__line-item');
+    await line.waitFor({state:'visible'});
+    assert.equal(await line.count(),1,'One historical line');
+    const cell=line.locator('.woocommerce-table__product-name');
+    // A historical product without a linked catalog product is rendered as
+    // plain text followed by the native strong.product-quantity element.
+    const name=await cell.evaluate(el=>{
+      const copy=el.cloneNode(true);
+      copy.querySelectorAll('.product-quantity,.wc-item-meta').forEach(node=>node.remove());
+      return copy.textContent.trim();
+    });
+    assert.equal(name,'CI Account Order own','Exact historical product name');
+    assert.match(await cell.locator('.product-quantity').innerText(),/^×\s*1$/,'Native item quantity');
+    assert(!(await content.innerText()).includes('CI Account Order other'),'Foreign order item absent');
     await audit(page,'order-detail-'+width);
     phase='isolation';
     const foreignUrl=new URL(ownUrl);
@@ -96,7 +119,7 @@ async function run(width) {
     assert.notEqual(foreignUrl.href,ownUrl.href);
     await page.goto(foreignUrl.href,{waitUntil:'load'});
     await main.locator('.woocommerce-error').waitFor({state:'visible'});
-    assert.equal(await main.getByText('CI Account Order other',{exact:true}).count(),0,'Foreign order must not leak');
+    assert(!(await main.innerText()).includes('CI Account Order other'),'Foreign order must not leak');
     assert.equal(await main.locator('.woocommerce-order-details').count(),0);
     phase='profile';
     await follow(page,nav.locator('.woocommerce-MyAccount-navigation-link--edit-account a'));
@@ -132,11 +155,12 @@ async function run(width) {
     assert.equal(await nav.count(),0);
     await page.goto(ownUrl.href,{waitUntil:'load'});
     await login.waitFor({state:'visible'});
-    assert.equal(await main.getByText('CI Account Order own',{exact:true}).count(),0,'Logged-out order must not leak');
+    assert(!(await main.innerText()).includes('CI Account Order own'),'Logged-out order must not leak');
+    assert.equal(await main.locator('.woocommerce-order-details').count(),0);
     results.push({width,passed:true,ownOrder:true,foreignOrderDenied:true,profileSaved:true,addressSaved:true,loggedOut:true});
   } catch(error) {
     // No request bodies, form values, credentials or order URLs with nonces in logs.
-    failures.push({width,phase,error:String(error).replaceAll(password,'[redacted]').slice(0,1600),path:new URL(page.url()).pathname});
+    failures.push({width,phase,error:String(error).replaceAll(password,'[redacted]').slice(0,1600),path:new URL(page.url()).pathname,orderLayout:await page.locator('main.bk-account .woocommerce-orders-table__cell-order-number, main.bk-account .woocommerce-order-details').evaluateAll(nodes=>nodes.map(el=>({tag:el.tagName,className:el.className,display:getComputedStyle(el).display,visible:el.getBoundingClientRect().height>0}))).catch(()=>[])});
     // Avoid capturing partially filled authentication forms.
     if(!['guest','login','recovery'].includes(phase))await page.screenshot({path:out('failure-account-'+width+'.png'),fullPage:true}).catch(()=>{});
   } finally {await context.close();}
