@@ -1,4 +1,6 @@
 import unittest
+import sqlite3
+from intelligence.repository import ObservationStore
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -33,6 +35,17 @@ class PriceTests(unittest.TestCase):
         options = dict(as_of=self.now, max_age=timedelta(days=1), max_skew=timedelta(hours=3))
         options.update(kwargs)
         return market_comparison(quotes,links,**options)
+
+    def test_history_read_from_store(self):
+        earlier = replace(self.a, observed_at=self.a.observed_at-timedelta(hours=1), price_minor=None)
+        with sqlite3.connect(":memory:") as db:
+            store = ObservationStore(db)
+            store.ingest((self.a,self.b,earlier))
+            rows = store.history_rows(self.a.source,self.a.external_id)
+            self.assertEqual(rows,(earlier,self.a))
+            self.assertEqual(price_history(rows,as_of=self.now).unknown_count,1)
+            self.assertEqual(store.history_rows("missing","001"),())
+            self.assertEqual(store.count(),3)
 
     def test_history_order_dedup_and_exact_median(self):
         earlier = replace(self.a, observed_at=self.a.observed_at-timedelta(hours=1), price_minor=5000001)
