@@ -45,7 +45,7 @@ final class AdminPanel
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
             wp_die('Método no permitido.', '', ['response' => 405]);
         }
-        check_admin_referer('bakata_intelligence_preview');
+        check_admin_referer('bakata_intelligence_preview', 'bk_int_upload_nonce');
         try {
             $file = $_FILES['snapshot'] ?? null;
             if (!is_array($file) || ($file['error'] ?? null) !== UPLOAD_ERR_OK
@@ -75,7 +75,7 @@ final class AdminPanel
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
             wp_die('Método no permitido.', '', ['response' => 405]);
         }
-        check_admin_referer('bakata_intelligence_clear');
+        check_admin_referer('bakata_intelligence_clear', 'bk_int_clear_nonce');
         delete_transient(self::key());
         self::redirect('cleared');
     }
@@ -121,10 +121,10 @@ final class AdminPanel
         }
         echo '<h2>Cargar evaluación offline</h2><form method="post" enctype="multipart/form-data" action="' . esc_url(admin_url('admin-post.php')) . '">';
         echo '<input type="hidden" name="action" value="bakata_intelligence_preview">';
-        wp_nonce_field('bakata_intelligence_preview');
+        wp_nonce_field('bakata_intelligence_preview', 'bk_int_upload_nonce', false);
         echo '<label for="bk-snapshot">Snapshot JSON (máximo 256 KiB)</label> ';
         echo '<input id="bk-snapshot" name="snapshot" type="file" accept=".json,application/json" required> ';
-        submit_button('Cargar vista previa', 'primary', 'submit', false);
+        submit_button('Cargar vista previa', 'primary', 'bk_upload', false);
         echo '</form><p>La vista previa es individual y caduca a los 15 minutos. No certifica la evidencia.</p>';
         if ($snapshot === null) {
             echo '<h2>Sin evaluaciones cargadas</h2><p>Genera un snapshot de prueba desde el servicio offline.</p></div>';
@@ -137,8 +137,8 @@ final class AdminPanel
         }
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
         echo '<input type="hidden" name="action" value="bakata_intelligence_clear">';
-        wp_nonce_field('bakata_intelligence_clear');
-        submit_button('Eliminar vista previa', 'secondary', 'submit', false);
+        wp_nonce_field('bakata_intelligence_clear', 'bk_int_clear_nonce', false);
+        submit_button('Eliminar vista previa', 'secondary', 'bk_clear', false);
         echo '</form><h2>Resumen de datos simulados</h2><p>Evaluación: ' . esc_html($snapshot['as_of']) . ' · Rúbrica: ' . esc_html($snapshot['rubric']) . '</p>';
         echo '<p>Total: <strong>' . esc_html((string) count($rows)) . '</strong>';
         foreach ($labels as $key => $label) {
@@ -155,10 +155,11 @@ final class AdminPanel
             echo '<option value="' . esc_attr($key) . '"' . selected($status, $key, false) . '>' . esc_html($label) . '</option>';
         }
         echo '</select> ';
-        submit_button('Filtrar', 'secondary', 'submit', false);
+        submit_button('Filtrar', 'secondary', 'bk_filter', false);
         echo '</form><h2>Candidatos</h2><div style="overflow-x:auto"><table class="widefat striped"><caption class="screen-reader-text">Evaluaciones sintéticas</caption>';
         echo '<thead><tr><th scope="col">Producto / fuente</th><th scope="col">Precio observado</th><th scope="col">Estado</th><th scope="col">Puntos / 100</th><th scope="col">Evidencia</th></tr></thead><tbody>';
-        foreach (PreviewSnapshot::filter($rows, $query, $status) as $row) {
+        $filtered = PreviewSnapshot::filter($rows, $query, $status);
+        foreach ($filtered as $row) {
             echo '<tr><td><strong>' . esc_html($row['title']) . '</strong><br>' . esc_html($row['source'] . ' / ' . $row['external_id']) . '</td>';
             echo '<td>' . esc_html(self::money($row['price_minor'], $row['currency'])) . '</td><td>' . esc_html($labels[$row['status']]) . '</td>';
             echo '<td>' . esc_html(self::score($row['score_bp'])) . '<br>Cobertura: ' . esc_html((string)$row['coverage_pct']) . '%</td>';
@@ -174,7 +175,7 @@ final class AdminPanel
             }
             echo '</ul></details></td></tr>';
         }
-        if (PreviewSnapshot::filter($rows, $query, $status) === []) {
+        if ($filtered === []) {
             echo '<tr><td colspan="5">No hay candidatos para estos filtros.</td></tr>';
         }
         echo '</tbody></table></div><p>Listo para revisión no significa aprobado para publicar.</p></div>';
