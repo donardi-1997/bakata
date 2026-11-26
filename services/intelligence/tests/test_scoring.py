@@ -115,3 +115,5 @@ class ScoringTests(unittest.TestCase):
             rank_review_ready((complete,complete))
         with self.assertRaises(ValueError):
             rank_review_ready((complete,replace(higher,as_of=self.now+timedelta(seconds=1))))
+        with self.assertRaises(ValueError):
+            rank_review_ready((complete,replace(higher,max_age=timedelta(days=2))))
