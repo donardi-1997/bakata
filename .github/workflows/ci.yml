@@ -19,6 +19,7 @@ jobs:
           docker compose -f services/intelligence/compose.yaml run --rm -T fixture python -m unittest discover -s tests -v
           docker compose -f services/intelligence/compose.yaml run --rm -T fixture
       - name: Intelligence jobs — persistent offline scheduler smoke
+        shell: bash
         run: |
           docker compose -f services/intelligence/compose.yaml --profile jobs config --quiet
           docker compose -f services/intelligence/compose.yaml --profile jobs build scheduler
@@ -28,6 +29,7 @@ jobs:
           docker compose -f services/intelligence/compose.yaml run --rm -T scheduler result ci-fixture > /tmp/bakata-job-result.json
           python3 -c 'import json; s=json.load(open("/tmp/bakata-job-result.json")); assert s["mode"]=="fixture" and s["rows"][0]["score_bp"]==7777'
       - name: Intelligence release — runtime isolation and resource limits
+        shell: bash
         run: |
           mkdir -p qa/reports
           docker compose -f services/intelligence/compose.yaml run --rm -T fixture python -m intelligence.release_probe | tee qa/reports/intelligence-fixture-runtime.json
