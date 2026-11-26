@@ -85,9 +85,7 @@ def patch_security(name, source):
                     $endpoint,
                     $args
                 );''')
-        source = one(source, 'class JPIODFW_OrdersModel', '''''' + reservation_source() + '''
-
-class JPIODFW_OrdersModel''')
+        source = one(source, 'class JPIODFW_OrdersModel', reservation_source() + '\n\nclass JPIODFW_OrdersModel')
         source = one(source, "'timeout' => '100000',", "'timeout' => 30,")
         source = one(source, " __('Dropi sync error: ' . $error_message, 'wc-dropi-integration')", " __('Dropi sync error; reconcile manually', 'wc-dropi-integration')")
         source = one(source, " __('Dropi sync error: ' . $response_body['message'], 'dropi')", " __('Dropi sync error; reconcile manually', 'wc-dropi-integration')")
