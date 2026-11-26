@@ -52,3 +52,20 @@
 @media(min-width:48rem) { .bk-product-detail div.product[id^="product-"] { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--bk-space-6); } .bk-product-detail :is(.related,.up-sells) ul.products { grid-template-columns: repeat(3,minmax(0,1fr)); } }
 @media(min-width:64rem) { .bk-product-detail :is(.related,.up-sells) ul.products { grid-template-columns: repeat(4,minmax(0,1fr)); } }
 @media(prefers-reduced-motion:reduce) { .bk-product-detail .woocommerce-product-gallery { transition: none !important; } }
+
+/* Lifestyle product detail: a clear purchase hierarchy with native controls. */
+.bk-product-detail .bk-product-category-context { margin:0 0 .75rem; font-size:var(--bk-size-small); font-weight:600; }
+.bk-product-detail .bk-product-category-context a { color:var(--bk-primary); text-underline-offset:.2em; }
+.bk-product-detail .bk-product-purchase-guide { padding:.85rem 1rem; margin-block:1rem; background:var(--bk-surface-muted); color:var(--bk-primary); border-radius:var(--bk-radius-sm); font-size:var(--bk-size-small); line-height:1.5; }
+.bk-product-detail div.product .summary { box-shadow:none; border-radius:var(--bk-radius-lg); }
+.bk-product-detail div.product div.images { background:var(--bk-surface-muted); padding:clamp(.5rem,1.5vw,1rem); }
+.bk-product-detail .woocommerce-product-gallery__image img { border-radius:var(--bk-radius-sm); }
+.bk-product-detail div.product .summary .price { margin-block:.75rem 1rem; }
+.bk-product-detail .bk-product-service { border-top:1px solid var(--bk-border); margin-top:1rem; padding-top:.75rem; }
+.bk-product-detail .bk-product-service ul { margin:0; }
+.bk-product-detail .bk-product-service a { color:var(--bk-primary); text-underline-offset:.2em; }
+.bk-product-detail :is(.related,.up-sells) ul.products li.product { display:flex; flex-direction:column; }
+.bk-product-detail :is(.related,.up-sells) ul.products li.product .button { margin-top:auto; width:100%; }
+@media(max-width:35.99rem) {
+ .bk-product-detail div.product form.cart .single_add_to_cart_button { flex-basis:100%; }
+}
