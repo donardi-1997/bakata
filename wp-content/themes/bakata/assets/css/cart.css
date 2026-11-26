@@ -106,3 +106,15 @@
     min-width: 0; overflow-wrap: anywhere;
   }
 }
+
+/* Shared purchase journey: no session-dependent or simulated progress. */
+.bk-purchase-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); list-style:none; gap:.5rem; margin:0 0 1rem; padding:0; counter-reset:bk-purchase; }
+.bk-purchase-steps li { counter-increment:bk-purchase; display:flex; align-items:center; gap:.5rem; min-width:0; padding:.75rem .5rem; border-bottom:2px solid var(--bk-border); font-size:var(--bk-size-small); color:var(--bk-text-muted); overflow-wrap:anywhere; }
+.bk-purchase-steps li::before { content:counter(bk-purchase); display:grid; place-items:center; flex:0 0 1.75rem; height:1.75rem; border-radius:50%; background:var(--bk-surface-muted); color:var(--bk-primary); font-weight:700; }
+.bk-purchase-steps li[aria-current=step] { border-color:var(--bk-primary); color:var(--bk-primary); font-weight:700; }
+.bk-purchase-steps li[aria-current=step]::before { background:var(--bk-primary); color:var(--bk-on-primary); }
+@media(max-width:35rem) { .bk-purchase-steps li { flex-direction:column; text-align:center; } }
+.bk-cart .wc-block-components-sidebar, .bk-cart .cart_totals { box-shadow:none; border:1px solid var(--bk-border); }
+.bk-cart .wc-block-components-totals-footer-item { font-size:1.125rem; }
+.bk-cart .wc-block-cart__submit-button { width:100%; }
+.bk-cart .wc-block-cart-item__remove-link { text-underline-offset:.2em; }

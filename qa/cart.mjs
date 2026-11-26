@@ -67,6 +67,12 @@ async function run(width) {
     assert.equal(cartUrl.origin,base.origin);
     await page.goto(cartUrl.href,{waitUntil:'load'});
     await page.locator('main.bk-cart').waitFor({state:'visible'});
+    const steps=page.locator('main .bk-purchase-steps');
+    assert.equal(await steps.count(),1,'Purchase progress rendered once');
+    assert.equal(await steps.locator('li').count(),3,'Three purchase stages');
+    assert.equal(await steps.locator('[aria-current=step]').count(),1,'Exactly one current stage');
+    assert.equal(await steps.locator('[aria-current=step]').innerText(),'Carrito');
+
     await page.locator('.wc-block-cart__empty-cart__title').waitFor({state:'visible'});
     assert.equal((await readCart(page)).items.length,0);
     await audit(page,'cart-empty-'+width);
