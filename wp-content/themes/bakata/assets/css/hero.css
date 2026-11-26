@@ -63,3 +63,32 @@
   .bk-hero { border: 1px solid CanvasText; }
   .bk-hero__content::after { display: none; }
 }
+
+/* Editorial landing: scoped to the storefront home. */
+.bk-home .bk-hero { background:#1F3A37; color:#F7F4EE; border-radius:1.5rem; }
+.bk-home .bk-hero__content { padding:clamp(2rem,5vw,4.5rem); }
+.bk-home .bk-hero__title { color:#F7F4EE; font-size:clamp(2.5rem,5.5vw,4.7rem); line-height:1.04; max-width:11ch; }
+.bk-home .bk-hero__eyebrow { color:#E9E1D3; letter-spacing:.13em; font-size:.75rem; }
+.bk-home .bk-hero__lead { color:#E9E1D3; max-width:38ch; }
+.bk-home .bk-hero__cta { background:#F7F4EE; color:#1F3A37; border-color:#F7F4EE; border-radius:999px; }
+.bk-home .bk-hero__cta:hover { background:#E9E1D3; color:#1F3A37; }
+.bk-home .bk-hero__cta:focus-visible { outline:3px solid #E9E1D3; outline-offset:4px; }
+.bk-home .bk-hero__media { aspect-ratio: 4 / 3; }
+.bk-home .bk-catalog-section { margin-block:clamp(2.5rem,6vw,5rem); }
+.bk-home .bk-category-grid a, .bk-home .bk-product-card { transition:transform .2s ease, box-shadow .2s ease; }
+@media (hover:hover) and (prefers-reduced-motion:no-preference) {
+ .bk-home .bk-category-grid a:hover, .bk-home .bk-product-card:hover { transform:translateY(-4px); box-shadow:0 12px 30px #1f3a3714; }
+}
+.bk-home .bk-editorial { box-sizing:border-box; width:min(100%,var(--bk-wide)); margin:clamp(2rem,5vw,4rem) auto; padding:clamp(2rem,6vw,5rem); border-radius:1.5rem; background:#E9E1D3; color:#1F3A37; text-align:center; }
+.bk-home .bk-editorial h2 { color:inherit; font-size:clamp(1.8rem,4vw,3rem); line-height:1.15; margin-inline:auto; max-width:22ch; }
+.bk-home .bk-editorial p { max-width:52ch; margin-inline:auto; }
+@media (min-width:48rem) {
+ .bk-home .bk-hero { grid-template-columns:minmax(0,48fr) minmax(0,52fr); }
+ .bk-home .bk-hero__media { aspect-ratio:auto; min-height:470px; }
+}
+@media (prefers-reduced-motion:reduce) {
+ .bk-home .bk-category-grid a, .bk-home .bk-product-card { transition:none; }
+}
+@media (forced-colors:active) {
+ .bk-home .bk-editorial { border:1px solid CanvasText; }
+}
