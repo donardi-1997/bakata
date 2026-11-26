@@ -165,6 +165,25 @@ async function checkShopping() {
     }
     await verifySearchProduct('CI Featured Visible',productUrl);
     await verifySearchProduct('CI Featured Search Only');
+    const refine = page.locator('.bk-search-refine');
+    assert.equal(await refine.count(),1,'Search refinement form');
+    assert.equal(await refine.locator('input[name=s]').inputValue(),'CI Featured');
+    assert.equal(await refine.locator('input[name=post_type]').inputValue(),'product');
+    await refine.locator('input[name=s]').fill('bakata-no-such-fixture-9482');
+    await Promise.all([
+      page.waitForURL(url=>url.searchParams.get('s')==='bakata-no-such-fixture-9482' && url.searchParams.get('post_type')==='product'),
+      refine.getByRole('button',{name:'Buscar productos',exact:true}).click()
+    ]);
+    await page.locator('.bk-search-intro').waitFor({state:'visible'});
+    assert.equal(await page.locator('main.bk-shop ul.products li.product').count(),0,'No fabricated search results');
+    await openHome(page);
+    await search.fill('CI Featured');
+    await Promise.all([
+      page.waitForURL(url=>url.searchParams.get('s')==='CI Featured' && url.searchParams.get('post_type')==='product'),
+      search.press('Enter')
+    ]);
+    await searchResults.first().waitFor({state:'visible',timeout:10000});
+
     for (const name of ['CI Featured Catalog Only','CI Featured Hidden','CI Featured Draft']) {
       assert.equal(await page.locator('main').getByRole('heading',{name,exact:true}).count(),0,'Non-searchable product leaked: '+name);
     }

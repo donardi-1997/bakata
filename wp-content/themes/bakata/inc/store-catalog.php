@@ -143,12 +143,13 @@ function bakata_render_featured_products(bool $recent = false): string {
                 <?php echo wp_kses_post($product->get_image('woocommerce_thumbnail', ['class' => 'bk-card__media', 'alt' => '', 'loading' => 'lazy', 'decoding' => 'async'])); ?>
               </a>
               <div class="bk-card__body">
+                <?php if ($product->is_on_sale()) : ?><span class="bk-product-offer"><?php esc_html_e('Oferta', 'bakata'); ?></span><?php endif; ?>
                 <h3 class="bk-heading bk-product-title"><a href="<?php echo esc_url($url); ?>"><?php echo esc_html($product->get_name()); ?></a></h3>
                 <?php if (wc_review_ratings_enabled() && $count > 0 && $rating > 0) : ?>
                   <p class="bk-product-rating"><?php echo esc_html(sprintf(_n('%1$s/5 · %2$s valoración', '%1$s/5 · %2$s valoraciones', $count, 'bakata'), number_format_i18n($rating, 1), number_format_i18n($count))); ?></p>
                 <?php endif; ?>
                 <?php if ($price !== '') : ?><div class="bk-price"><?php echo wp_kses_post($price); ?></div><?php endif; ?>
-                <?php if (!$product->is_in_stock()) : ?><p class="bk-product-stock"><?php esc_html_e('Agotado', 'bakata'); ?></p><?php endif; ?>
+                <?php if (!$product->is_in_stock()) : ?><p class="bk-product-stock"><?php esc_html_e('Agotado', 'bakata'); ?></p><?php elseif ($product->is_on_backorder(1)) : ?><p class="bk-product-stock"><?php esc_html_e('Disponible bajo pedido', 'bakata'); ?></p><?php endif; ?>
                 <?php if ($can_add) : ?>
                   <form method="post" action="<?php echo esc_url(wc_get_cart_url()); ?>" class="bk-product-action">
                     <input type="hidden" name="bakata_cart_redirect" value="1">
