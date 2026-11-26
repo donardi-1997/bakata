@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Bakatá Core
  * Description: Base modular para la operación comercial de Bakatá Store.
- * Version: 0.2.0
+ * Version: 0.3.0
  * Requires at least: 6.6
  * Requires PHP: 8.3
  * Author: Bakatá
@@ -17,6 +17,7 @@ defined('ABSPATH') || exit;
 
 require_once __DIR__ . '/src/Suppliers/Contracts.php';
 require_once __DIR__ . '/src/Suppliers/CatalogPreview.php';
+require_once __DIR__ . '/src/Pricing/PricingPreview.php';
 
 add_action('before_woocommerce_init', static function (): void {
     if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {

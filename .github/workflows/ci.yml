@@ -16,6 +16,8 @@ jobs:
         run: docker run --rm -v "$PWD/wp-content:/src:ro" php:8.3-cli sh -c 'find /src -name "*.php" -exec php -l {} +'
       - name: Supplier foundation — isolated contract and preview tests
         run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-supplier-foundation.php
+      - name: Pricing preview — isolated unit economics tests
+        run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-pricing-preview.php
       - name: Validate theme JSON and shell
         run: |
           python3 -m json.tool wp-content/themes/bakata/theme.json > /dev/null
