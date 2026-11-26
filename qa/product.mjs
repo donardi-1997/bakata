@@ -34,6 +34,15 @@ async function layout(width, slug, name) {
     await gallery.waitFor({state:'visible'});
     await page.waitForFunction(()=>Array.from(document.querySelectorAll('.woocommerce-product-gallery__image img')).some(img=>img.complete&&img.naturalWidth>0));
     assert.equal(await page.locator('.summary form.cart').count(),1);
+    const guide=page.locator('.bk-product-purchase-guide');
+    assert.equal(await guide.count(),slug==='ci-pdp-variable'?1:0,'Purchase guidance matches product type');
+    if(slug==='ci-pdp-variable') {
+      assert(await guide.isVisible(),'Variation guidance visible');
+      assert.match(await guide.innerText(),/Selecciona una opción/);
+    }
+    for(const href of await page.locator('.bk-product-category-context a').evaluateAll(links=>links.map(link=>link.href))) {
+      assert.equal(new URL(href).origin,base.origin,'Product category link must be local');
+    }
     await page.locator('.summary .single_add_to_cart_button').waitFor({state:'visible'});
     assert.equal(await page.locator('.bk-product-service a').count(),1,'Only published CI shipping policy');
     assert.equal(await page.locator('.bk-product-service a').first().innerText(),'Información de envíos');
