@@ -13,7 +13,8 @@
 - [ ] Accesibilidad, rendimiento y SEO.
 
 ## Sprint 03 — Operación
-- [ ] Seleccionar proveedor y validar costos, inventario, entrega y devoluciones.
+- [x] Evaluación pública inicial de proveedores (ADR 001, propuesta Dropi).
+- [ ] Confirmar proveedor, contrato API autorizado y sandbox; validar costos, inventario, entrega y devoluciones según [puertas G0–G6](provider-evaluation.md).
 - [ ] Diseñar adaptadores, sincronización, precios y margen de contribución.
 - [ ] Configurar pagos de prueba y flujo de pedidos y despacho.
 - [ ] Validar políticas, datos personales e impuestos aplicables.

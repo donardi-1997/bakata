@@ -47,3 +47,7 @@ FulfillmentPreview reproduce historias de eventos normalizados por grupo de Orde
 ## Recibos de webhooks
 
 SignedEvent define un protocolo HMAC interno de referencia, WebhookInbox valida vinculaciones de grupos y WpReceiptLedger deduplica recibos mediante una clave única en tabla propia. No se registra un endpoint ni se procesa el efecto comercial. Véase [recibos de webhooks](webhook-receipts.md).
+
+## Evaluación de proveedor
+
+El [ADR 001](provider-evaluation.md) recomienda evaluar Dropi Colombia primero y mantiene CJdropshipping y Rocketfy como alternativas. La decisión comercial y el contrato API/sandbox siguen pendientes; no se implementa adapter real sin completar G0. No hay cambios de runtime en esta evaluación.
