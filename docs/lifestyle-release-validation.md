@@ -12,3 +12,7 @@ Los PR #32 y #33 se fusionaron inicialmente en ramas intermedias. La revisión d
 - No publicar productos, no transmitir pedidos a proveedores, no cambiar credenciales ni protecciones.
 
 Los PR fusionados no constituyen por sí solos evidencia de despliegue o de presencia de todos los cambios. Comprobar los archivos del SHA desplegado. La confirmación de Core Web Vitals de campo, la fotografía definitiva del catálogo y la validación de pagos en sandbox quedan fuera de la aprobación automática de esta fase.
+
+## Corrección de QA tras integración de fases 6–9
+
+La ejecución 45896660213 falló en carrito a 1440 px tras recarga con cupón; 320 y 768 px pasaron. WooCommerce usa un contenedor sticky cuando la referencia del CTA queda por debajo del viewport y oculta ese contenedor en escritorio. La prueba desplaza el wrapper nativo persistente a la vista, exige visibilidad y ejecuta un click de prueba (trial, sin navegación). Se conservan validaciones de sesión, cantidades, descuento, totales, enlace local, accesibilidad y eliminación; no se fuerza visibilidad mediante CSS ni se omite la comprobación. Se añade diagnóstico de geometría del CTA en caso de fallo. Pendiente confirmar la nueva ejecución de CI.
