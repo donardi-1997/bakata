@@ -98,17 +98,23 @@ class PinnedHTTPS(http.client.HTTPSConnection):
             raise
 
 
-def https_get(url: str, host: str, timeout: float, max_bytes: int) -> Response:
+def https_get(url: str, host: str, timeout: float, max_bytes: int, *,
+              accept: str = "text/html, application/xhtml+xml",
+              expected_ip: str | None = None) -> Response:
     ip = public_ip(host)
+    if expected_ip is not None and ip != expected_ip:
+        raise PolicyError("DNS destination differs from reviewed address")
     parsed = urlsplit(url)
     target = (parsed.path or "/") + ("?" + parsed.query if parsed.query else "")
     conn = PinnedHTTPS(host, ip, timeout)
     try:
-        conn.request("GET", target, headers={"User-Agent": USER_AGENT, "Accept": "text/html, application/xhtml+xml", "Accept-Encoding": "identity", "Connection": "close"})
+        conn.request("GET", target, headers={"User-Agent": USER_AGENT, "Accept": accept, "Accept-Encoding": "identity", "Connection": "close"})
         response = conn.getresponse()
         headers = {k.lower(): v for k, v in response.getheaders()}
         if response.status != 200:
             return Response(response.status, headers, b"")
+        if accept == "application/json" and headers.get("content-type", "").split(";",1)[0].strip().lower() != accept:
+            raise FetchError("Unexpected JSON media type")
         if headers.get("content-encoding", "identity").lower() != "identity":
             raise FetchError("Compressed response rejected")
         length = headers.get("content-length")
@@ -125,6 +131,8 @@ def https_get(url: str, host: str, timeout: float, max_bytes: int) -> Response:
             body.extend(chunk)
             if len(body) > max_bytes:
                 raise FetchError("Body exceeds limit")
+        if length is not None and len(body) != int(length):
+            raise FetchError("Incomplete response body")
         return Response(response.status, headers, bytes(body))
     finally:
         conn.close()
