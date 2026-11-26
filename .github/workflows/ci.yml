@@ -180,6 +180,10 @@ jobs:
         run: |
           python3 -m py_compile scripts/audit-dropify.py scripts/harden-dropify.py scripts/dropify_security_patch.py scripts/dropify_hpos_patch.py
           docker run --rm -v "$PWD:/src:ro" php:8.3-cli sh -c 'php -l /src/tools/dropify-quarantine/dispatch-reservation.php && php -l /src/scripts/test-dropify-reservation-ci.php && php /src/scripts/test-dropify-guard.php'
+      - name: Dropify credential vault — authenticated encryption
+        run: |
+          python3 -m py_compile scripts/verify-dropify.py
+          docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-dropify-token-vault.php
       - name: Dropify reservation — concurrent isolated MariaDB claimants
         run: |
           docker compose run --rm -T --no-deps -e BAKATA_CI_FIXTURES=1 -v "$PWD:/bakata-ci:ro" --entrypoint sh cli /bakata-ci/scripts/test-dropify-reservation-ci.sh
