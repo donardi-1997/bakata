@@ -19,11 +19,11 @@ function bakata_render_store_hero(): string {
     ?>
     <section class="bk-hero" aria-labelledby="<?php echo esc_attr($title_id); ?>">
       <div class="bk-hero__content">
-        <p class="bk-hero__eyebrow"><?php esc_html_e('Curado para tu día a día', 'bakata'); ?></p>
-        <h1 id="<?php echo esc_attr($title_id); ?>" class="bk-heading bk-h1 bk-hero__title"><?php esc_html_e('Descubre. Simplifica. Disfruta.', 'bakata'); ?></h1>
-        <p class="bk-hero__lead"><?php esc_html_e('Selecciones pensadas para tu día a día.', 'bakata'); ?></p>
+        <p class="bk-hero__eyebrow"><?php esc_html_e('BAKATÁ · ENCUENTRA TU FAVORITO', 'bakata'); ?></p>
+        <h1 id="<?php echo esc_attr($title_id); ?>" class="bk-heading bk-h1 bk-hero__title"><?php esc_html_e('Pequeños hallazgos. Grandes días.', 'bakata'); ?></h1>
+        <p class="bk-hero__lead"><?php esc_html_e('Descubre productos que le dan un nuevo sentido a lo cotidiano. Encuentra ideas para tu espacio, tu rutina y tu estilo.', 'bakata'); ?></p>
         <?php if ($shop_url) : ?>
-          <a class="bk-button bk-hero__cta" href="<?php echo esc_url($shop_url); ?>"><?php esc_html_e('Explorar productos', 'bakata'); ?>
+          <a class="bk-button bk-hero__cta" href="<?php echo esc_url($shop_url); ?>"><?php esc_html_e('Descubrir la tienda', 'bakata'); ?>
             <svg class="bk-icon" aria-hidden="true" focusable="false"><use href="<?php echo esc_url(get_theme_file_uri('assets/icons/sprite.svg') . '#arrow'); ?>"></use></svg>
           </a>
         <?php endif; ?>
@@ -37,3 +37,12 @@ function bakata_render_store_hero(): string {
 }
 
 add_shortcode('bakata_hero', 'bakata_render_store_hero');
+
+/** Closing landing CTA uses the same configured catalog destination. */
+add_shortcode('bakata_landing_cta', static function (): string {
+    $url = function_exists('bakata_catalog_shop_url') ? bakata_catalog_shop_url() : '';
+    if (!$url) {
+        return '';
+    }
+    return sprintf('<a class="bk-button" href="%s">%s</a>', esc_url($url), esc_html__('Explorar la colección', 'bakata'));
+});
