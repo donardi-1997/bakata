@@ -63,7 +63,7 @@ final class DraftBridge
             || $supplier->currency !== get_woocommerce_currency() || wc_get_price_decimals() !== 2) {
             throw new InvalidArgumentException('Currency or minor unit mismatch.');
         }
-        if ($categoryId < 1 || !($term = get_term($categoryId, 'product_cat')) instanceof \WP_Term) {
+        if ($categoryId < 1 || !(get_term($categoryId, 'product_cat') instanceof \WP_Term)) {
             throw new InvalidArgumentException('Select an existing WooCommerce product category.');
         }
         $now = new DateTimeImmutable('now');
@@ -79,7 +79,7 @@ final class DraftBridge
             'reviewer' => get_current_user_id(), 'max_age' => $maxAgeSeconds,
         ], JSON_THROW_ON_ERROR));
         return ['approval_digest'=>$digest, 'candidate_key'=>[$candidateSource,$candidateId,$candidate['observed_at']],
-            'snapshot_sha256'=>hash('sha256',$snapshotJson), 'sku'=>$supplier->proposedSku(),
+            'snapshot_sha256'=>hash('sha256',$snapshotJson), 'plan_fingerprint'=>$plan->fingerprint, 'sku'=>$supplier->proposedSku(),
             'category_id'=>$categoryId, 'candidate_price_minor'=>$plan->quote->priceMinor,
             'contribution_minor'=>$plan->quote->contributionMinor, 'currency'=>$supplier->currency,
             'mapping_ref'=>$mappingRef, 'reviewer'=>get_current_user_id()];
@@ -123,11 +123,11 @@ final class DraftBridge
                     || !current_user_can('edit_post',$id)) {
                     throw new RuntimeException('Previously imported draft changed; manual review required.');
                 }
-                // Reuse existing importer to verify its original commercial invariants, without creating.
+                // Replay is read-only; never invoke a create method for a completed receipt.
                 if ((int)wc_get_product_id_by_sku($preview['sku']) !== $id) {
                     throw new RuntimeException('Previously imported SKU changed.');
                 }
-                return (new WooDraftImporter())->create($supplier,$costs,$policy,$maxAgeSeconds);
+                return $id;
             }
             if ((int)wc_get_product_id_by_sku($preview['sku']) !== 0) {
                 throw new RuntimeException('Existing SKU requires manual review.');
@@ -197,6 +197,9 @@ final class DraftBridge
             && $product->get_backorders('edit') === 'no'
             && $product->get_category_ids('edit') === [$preview['category_id']]
             && $product->get_meta('_bakata_source_identity',true,'edit') === $supplier->identity()
+            && $product->get_meta('_bakata_import_fingerprint',true,'edit') === $preview['plan_fingerprint']
+            && $product->get_meta('_bakata_candidate_currency',true,'edit') === $preview['currency']
+            && $product->get_meta('_bakata_candidate_minor_unit',true,'edit') === '2'
             && $product->get_meta('_bakata_candidate_price_minor',true,'edit') === (string)$preview['candidate_price_minor']
             && $product->get_meta('_bakata_intelligence_approval_digest',true,'edit') === $preview['approval_digest']
             && $product->get_meta('_bakata_intelligence_snapshot_sha256',true,'edit') === $preview['snapshot_sha256']
