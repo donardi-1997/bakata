@@ -25,11 +25,28 @@ function bakata_render_store_header(): string {
     }
     $category_links = [];
     if (taxonomy_exists('product_cat')) {
-        $categories = get_terms(['taxonomy' => 'product_cat', 'parent' => 0, 'hide_empty' => true, 'exclude' => [(int) get_option('default_product_cat')], 'number' => 9, 'orderby' => 'name']);
+        $categories = get_terms([
+            'taxonomy' => 'product_cat', 'hide_empty' => true, 'hierarchical' => true,
+            'pad_counts' => true, 'exclude' => [(int) get_option('default_product_cat')],
+            'orderby' => 'name',
+        ]);
         if (!is_wp_error($categories)) {
+            $by_parent = [];
             foreach ($categories as $category) {
+                $by_parent[(int) $category->parent][] = $category;
+            }
+            $priority = array_flip(['hogar-y-decoracion', 'tecnologia', 'cocina', 'belleza-y-cuidado-personal', 'mascotas', 'moda-y-accesorios', 'deportes-y-bienestar', 'automotriz', 'herramientas']);
+            $roots = $by_parent[0] ?? [];
+            usort($roots, static fn ($a, $b): int => (($priority[$a->slug] ?? PHP_INT_MAX) <=> ($priority[$b->slug] ?? PHP_INT_MAX)) ?: strcasecmp($a->name, $b->name));
+            foreach (array_slice($roots, 0, 9) as $category) {
                 $url = get_term_link($category);
-                if (!is_wp_error($url)) { $category_links[$url] = $category->name; }
+                if (is_wp_error($url)) { continue; }
+                $children = [];
+                foreach (array_slice($by_parent[(int) $category->term_id] ?? [], 0, 8) as $child) {
+                    $child_url = get_term_link($child);
+                    if (!is_wp_error($child_url)) { $children[$child_url] = $child->name; }
+                }
+                $category_links[$url] = ['name' => $category->name, 'children' => $children];
             }
         }
     }
@@ -46,7 +63,19 @@ function bakata_render_store_header(): string {
             <?php foreach ($links as $url => $label) : ?>
               <a href="<?php echo esc_url($url); ?>"><?php echo esc_html($label); ?></a>
             <?php endforeach; ?>
-            <?php foreach ($category_links as $url => $label) : ?><a href="<?php echo esc_url($url); ?>"><?php echo esc_html($label); ?></a><?php endforeach; ?>
+            <?php foreach ($category_links as $url => $category) : ?>
+              <?php if ($category['children']) : ?>
+                <details class="bk-mobile-category">
+                  <summary><?php echo esc_html($category['name']); ?></summary>
+                  <a href="<?php echo esc_url($url); ?>"><?php echo esc_html(sprintf(__('Ver todo: %s', 'bakata'), $category['name'])); ?></a>
+                  <?php foreach ($category['children'] as $child_url => $child_name) : ?>
+                    <a href="<?php echo esc_url($child_url); ?>"><?php echo esc_html($child_name); ?></a>
+                  <?php endforeach; ?>
+                </details>
+              <?php else : ?>
+                <a href="<?php echo esc_url($url); ?>"><?php echo esc_html($category['name']); ?></a>
+              <?php endif; ?>
+            <?php endforeach; ?>
             <?php if ($account) : ?><a href="<?php echo esc_url($account); ?>"><?php esc_html_e('Mi cuenta', 'bakata'); ?></a><?php endif; ?>
           </nav>
         </details>
@@ -75,7 +104,21 @@ function bakata_render_store_header(): string {
       </div>
       <?php if ($category_links) : ?>
         <nav class="bk-category-nav" aria-label="<?php esc_attr_e('Categorías de productos', 'bakata'); ?>">
-          <?php foreach ($category_links as $url => $label) : ?><a href="<?php echo esc_url($url); ?>"><?php echo esc_html($label); ?></a><?php endforeach; ?>
+          <details class="bk-mega">
+            <summary><?php esc_html_e('Todas las categorías', 'bakata'); ?></summary>
+            <div class="bk-mega-panel">
+              <?php foreach ($category_links as $url => $category) : ?>
+                <div class="bk-mega-group">
+                  <a class="bk-mega-heading" href="<?php echo esc_url($url); ?>"><?php echo esc_html($category['name']); ?></a>
+                  <?php foreach ($category['children'] as $child_url => $child_name) : ?>
+                    <a href="<?php echo esc_url($child_url); ?>"><?php echo esc_html($child_name); ?></a>
+                  <?php endforeach; ?>
+                </div>
+              <?php endforeach; ?>
+              <?php if ($shop) : ?><a class="bk-mega-all" href="<?php echo esc_url($shop); ?>"><?php esc_html_e('Explorar toda la tienda', 'bakata'); ?></a><?php endif; ?>
+            </div>
+          </details>
+          <?php foreach ($category_links as $url => $category) : ?><a href="<?php echo esc_url($url); ?>"><?php echo esc_html($category['name']); ?></a><?php endforeach; ?>
         </nav>
       <?php endif; ?>
     </div>
