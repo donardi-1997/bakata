@@ -68,7 +68,18 @@ async function run(width) {
     await Promise.all([page.waitForURL(u=>u.href===shopUrl.href,{waitUntil:'load'}),back.click()]);
     assert(await page.locator('main.bk-shop').isVisible());
     await page.goto(base.href,{waitUntil:'load'});
-    await Promise.all([page.waitForURL(u=>u.href===cartUrl.href,{waitUntil:'load'}),card.getByRole('button',{name:'Añadir al carrito: CI Featured Visible',exact:true}).click()]);
+    // A successful homepage add must redirect to a GET cart document, so
+    // refreshing it cannot replay the original add-to-cart POST.
+    const [cartDocument]=await Promise.all([
+      page.waitForResponse(r=>r.request().isNavigationRequest()
+        && r.request().method()==='GET' && new URL(r.url()).href===cartUrl.href),
+      card.getByRole('button',{name:'Añadir al carrito: CI Featured Visible',exact:true}).click()
+    ]);
+    assert(cartDocument.ok(),'Cart GET after native add-to-cart');
+    const previous=cartDocument.request().redirectedFrom();
+    assert(previous && previous.method()==='POST','Expected native POST/redirect/GET');
+    assert([302,303].includes((await previous.response())?.status()),'Expected safe redirect status');
+    await page.waitForURL(u=>u.href===cartUrl.href,{waitUntil:'load'});
     const row=page.locator('.wc-block-cart-items__row').filter({has:page.getByText('CI Featured Visible',{exact:true})});
     await row.waitFor({state:'visible'});
     const initial=await waitCart(page,c=>c.items.length===1&&c.items[0].quantity===1,'Initial item');
@@ -110,7 +121,9 @@ async function run(width) {
     assert.equal(Number(discounted.totals.total_price),
       Number(updated.totals.total_price)-5000*10**minor,'Server total after fixed discount');
     phase='reload';
-    await page.reload({waitUntil:'load'});
+    const reload=await page.reload({waitUntil:'load'});
+    assert(reload?.ok(),'Cart reload request succeeded');
+    assert.equal(reload.request().method(),'GET','Reload must not replay an add-to-cart POST');
     await row.waitFor({state:'visible'});
     const persisted=await waitCart(page,c=>c.items.some(i=>i.id===id&&i.quantity===2)&&c.coupons.some(x=>x.code===coupon),'Cart survives reload');
     assert.equal(persisted.totals.total_price,discounted.totals.total_price);

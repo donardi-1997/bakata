@@ -139,6 +139,7 @@ function bakata_render_featured_products(): string {
                 <?php if (!$product->is_in_stock()) : ?><p class="bk-product-stock"><?php esc_html_e('Agotado', 'bakata'); ?></p><?php endif; ?>
                 <?php if ($can_add) : ?>
                   <form method="post" action="<?php echo esc_url(wc_get_cart_url()); ?>" class="bk-product-action">
+                    <input type="hidden" name="bakata_cart_redirect" value="1">
                     <input type="hidden" name="add-to-cart" value="<?php echo esc_attr((string) $product->get_id()); ?>">
                     <button type="submit" class="bk-button" aria-label="<?php echo esc_attr(sprintf(__('Añadir al carrito: %s', 'bakata'), $product->get_name())); ?>"><?php esc_html_e('Añadir al carrito', 'bakata'); ?></button>
                   </form>
@@ -155,3 +156,18 @@ function bakata_render_featured_products(): string {
     return (string) ob_get_clean();
 }
 add_shortcode('bakata_featured_products', 'bakata_render_featured_products');
+
+/**
+ * Post/Redirect/Get for the homepage's native add-to-cart form.
+ * WooCommerce invokes this filter only after successful addition.
+ * The marker selects presentation behavior, not authorization; the destination
+ * is always the configured local cart, never a user-supplied URL.
+ */
+add_filter('woocommerce_add_to_cart_redirect', static function ($url, $product) {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+        && ($_POST['bakata_cart_redirect'] ?? null) === '1'
+        && function_exists('wc_get_cart_url')) {
+        return wc_get_cart_url();
+    }
+    return $url;
+}, 10, 2);
