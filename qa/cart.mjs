@@ -93,11 +93,17 @@ async function run(width) {
     phase='coupon';
     const couponPanel=page.locator('.wc-block-components-totals-coupon');
     await couponPanel.waitFor({state:'visible'});
-    const input=couponPanel.locator('input');
-    if(!await input.isVisible())await couponPanel.locator('button.wc-block-components-panel__button').click();
-    await input.waitFor({state:'visible'});
+    // WC 11.3.1 renders the disclosure with Ariakit (div role=button).
+    // Use its semantic role and aria-expanded state, not its tag name.
+    const toggle=couponPanel.getByRole('button',{name:'Add coupons',exact:true});
+    await toggle.waitFor({state:'visible',timeout:10000});
+    const input=couponPanel.locator('input[id^="wc-block-components-totals-coupon__input-"]');
+    if((await toggle.getAttribute('aria-expanded'))==='false')await toggle.click();
+    await input.waitFor({state:'visible',timeout:10000});
+    assert.equal(await toggle.getAttribute('aria-expanded'),'true','Coupon disclosure expanded');
     await input.fill(coupon);
-    await couponPanel.locator('.wc-block-components-totals-coupon__button').click();
+    const apply=couponPanel.locator('.wc-block-components-totals-coupon__button');
+    await apply.click();
     const discounted=await waitCart(page,c=>c.coupons.some(x=>x.code===coupon),'Coupon applied');
     assert.equal(Number(discounted.totals.total_discount),5000*10**minor);
     assert.equal(Number(discounted.totals.total_items),unit*2);
@@ -123,7 +129,7 @@ async function run(width) {
     assert.equal(await page.locator('.wc-block-cart-items__row').count(),0);
     results.push({width,passed:true,quantity:2,currency:'COP',couponDiscount:5000,checkoutLink:checkoutUrl.pathname});
   } catch(error) {
-    failures.push({width,phase,error:String(error),url:page.url(),mainText:(await page.locator('main').first().innerText({timeout:2000}).catch(()=>'' )).slice(0,1600)});
+    failures.push({width,phase,error:String(error),url:page.url(),couponControls:await page.locator('.wc-block-components-totals-coupon').evaluateAll(nodes=>nodes.map(node=>Array.from(node.querySelectorAll('[role=button],button,input')).map(el=>({tag:el.tagName,role:el.getAttribute('role'),expanded:el.getAttribute('aria-expanded'),className:el.className,text:el.textContent?.trim().slice(0,100)})))).catch(()=>[]),mainText:(await page.locator('main').first().innerText({timeout:2000}).catch(()=>'' )).slice(0,1600)});
     await page.screenshot({path:out('failure-cart-'+width+'.png'),fullPage:true}).catch(()=>{});
   } finally {await context.close();}
 }
