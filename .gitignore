@@ -24,3 +24,7 @@ vendor/
 # Reproducible upstream fonts, provisioned locally by scripts/install-fonts.sh
 /wp-content/themes/bakata/assets/fonts/*.woff2
 /wp-content/themes/bakata/assets/fonts/.download.*/
+
+# Browser QA: local install and generated reports
+/qa/node_modules/
+/qa/reports/

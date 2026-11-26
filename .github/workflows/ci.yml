@@ -49,6 +49,14 @@ jobs:
           test "$(git hash-object /tmp/bakata-inter.woff2)" = '5a8d3e72ad7ffb62af3b146e1b1f54ab5813a212'
           curl --fail --silent --show-error http://localhost:8080/wp-content/themes/bakata/assets/css/design-system.css -o /tmp/bakata-design-system.css
           grep -F -- '--bk-primary: #1F3A37' /tmp/bakata-design-system.css
+      - name: Install isolated browser QA tools
+        run: |
+          npm --prefix qa install --ignore-scripts --no-audit --no-fund --package-lock=false
+          qa/node_modules/.bin/playwright install --with-deps chromium
+      - name: Browser QA — empty catalog
+        env:
+          BAKATA_CI_FIXTURES: '1'
+        run: npm --prefix qa run empty
       - name: Verify empty and populated homepage catalog
         run: |
           grep -F 'class="bk-catalog-section bk-categories"' /tmp/bakata-home.html
@@ -84,6 +92,27 @@ jobs:
           if grep -Eq 'ci-returns-draft|ci-contact-protected|ci-terms-private' /tmp/bakata-footer.html; then
             echo 'Nonpublic service page exposed'; exit 1
           fi
+      - name: Browser QA — populated catalog and cart
+        env:
+          BAKATA_CI_FIXTURES: '1'
+        run: |
+          docker compose run --rm -T cli wp option update woocommerce_coming_soon no
+          npm --prefix qa test
+      - name: Lighthouse diagnostic report
+        if: success()
+        continue-on-error: true
+        run: |
+          mkdir -p qa/reports
+          export CHROME_PATH="$(node --input-type=module -e "import { chromium } from './qa/node_modules/playwright/index.mjs'; console.log(chromium.executablePath())")"
+          npm --prefix qa run lighthouse
+      - name: Upload browser QA evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: homepage-qa-${{ github.run_id }}-${{ github.run_attempt }}
+          path: qa/reports/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Diagnostic logs
         if: failure()
         run: docker compose logs --tail=100
