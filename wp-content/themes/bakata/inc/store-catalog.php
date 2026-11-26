@@ -26,16 +26,19 @@ function bakata_render_categories(): string {
         'exclude' => [(int) get_option('default_product_cat')],
         'orderby' => 'name',
         'order' => 'ASC',
-        'number' => 6,
+        'number' => 0,
     ]);
     if (is_wp_error($terms)) {
         $terms = [];
     }
+    $priority = array_flip(['hogar-y-decoracion', 'tecnologia', 'cocina', 'belleza-y-cuidado-personal', 'mascotas', 'moda-y-accesorios', 'deportes-y-bienestar', 'automotriz', 'herramientas']);
+    usort($terms, static fn ($a, $b): int => (($priority[$a->slug] ?? PHP_INT_MAX) <=> ($priority[$b->slug] ?? PHP_INT_MAX)) ?: strcasecmp($a->name, $b->name));
     $items = [];
     foreach ($terms as $term) {
         $url = get_term_link($term);
         if (!is_wp_error($url)) {
             $items[] = [$term, $url];
+            if (count($items) >= 9) { break; }
         }
     }
     $title = wp_unique_id('bk-categories-title-');
@@ -44,7 +47,7 @@ function bakata_render_categories(): string {
     ?>
     <section class="bk-catalog-section bk-categories" aria-labelledby="<?php echo esc_attr($title); ?>">
       <div class="bk-section-heading">
-        <h2 class="bk-heading bk-h2" id="<?php echo esc_attr($title); ?>"><?php esc_html_e('Explora por categoría', 'bakata'); ?></h2>
+        <h2 class="bk-heading bk-h2" id="<?php echo esc_attr($title); ?>"><?php esc_html_e('Explora por categorías', 'bakata'); ?></h2>
         <?php if ($shop && $items) : ?><a class="bk-link" href="<?php echo esc_url($shop); ?>"><?php esc_html_e('Ver tienda', 'bakata'); ?></a><?php endif; ?>
       </div>
       <?php if (!$items) : ?>
