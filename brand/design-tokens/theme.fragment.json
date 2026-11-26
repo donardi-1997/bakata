@@ -1,0 +1,64 @@
+{
+  "version": 3,
+  "settings": {
+    "color": {
+      "palette": [
+        {
+          "slug": "verde",
+          "name": "Verde profundo",
+          "color": "#1F3A37"
+        },
+        {
+          "slug": "terracota",
+          "name": "Terracota",
+          "color": "#B86842"
+        },
+        {
+          "slug": "arena",
+          "name": "Arena suave",
+          "color": "#E9E1D3"
+        },
+        {
+          "slug": "marfil",
+          "name": "Marfil",
+          "color": "#F7F4EE"
+        },
+        {
+          "slug": "carbon",
+          "name": "Carbón",
+          "color": "#1E1E1E"
+        }
+      ]
+    },
+    "typography": {
+      "fontFamilies": [
+        {
+          "slug": "jakarta",
+          "name": "Plus Jakarta Sans",
+          "fontFamily": "\"Plus Jakarta Sans\", system-ui, sans-serif"
+        },
+        {
+          "slug": "inter",
+          "name": "Inter",
+          "fontFamily": "Inter, system-ui, sans-serif"
+        }
+      ]
+    }
+  },
+  "styles": {
+    "color": {
+      "background": "var:preset|color|marfil",
+      "text": "var:preset|color|carbon"
+    },
+    "typography": {
+      "fontFamily": "var:preset|font-family|inter"
+    },
+    "elements": {
+      "heading": {
+        "typography": {
+          "fontFamily": "var:preset|font-family|jakarta"
+        }
+      }
+    }
+  }
+}

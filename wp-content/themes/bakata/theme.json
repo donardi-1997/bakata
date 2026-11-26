@@ -9,14 +9,29 @@
     "color": {
       "palette": [
         {
-          "slug": "ink",
-          "name": "Carbón",
-          "color": "#171717"
+          "slug": "verde",
+          "name": "Verde profundo",
+          "color": "#1F3A37"
         },
         {
-          "slug": "paper",
+          "slug": "terracota",
+          "name": "Terracota",
+          "color": "#B86842"
+        },
+        {
+          "slug": "arena",
+          "name": "Arena suave",
+          "color": "#E9E1D3"
+        },
+        {
+          "slug": "marfil",
           "name": "Marfil",
-          "color": "#F5F3EE"
+          "color": "#F7F4EE"
+        },
+        {
+          "slug": "carbon",
+          "name": "Carbón",
+          "color": "#1E1E1E"
         },
         {
           "slug": "white",
@@ -24,9 +39,19 @@
           "color": "#FFFFFF"
         },
         {
+          "slug": "ink",
+          "name": "Carbón (compatibilidad)",
+          "color": "#1E1E1E"
+        },
+        {
+          "slug": "paper",
+          "name": "Marfil (compatibilidad)",
+          "color": "#F7F4EE"
+        },
+        {
           "slug": "accent",
-          "name": "Lima",
-          "color": "#C4F04D"
+          "name": "Verde (compatibilidad)",
+          "color": "#1F3A37"
         }
       ]
     },
@@ -42,8 +67,8 @@
   },
   "styles": {
     "color": {
-      "background": "#FFFFFF",
-      "text": "#171717"
+      "background": "var:preset|color|marfil",
+      "text": "var:preset|color|carbon"
     },
     "typography": {
       "fontFamily": "var:preset|font-family|system",
@@ -59,8 +84,8 @@
     "elements": {
       "button": {
         "color": {
-          "background": "#171717",
-          "text": "#FFFFFF"
+          "background": "var:preset|color|verde",
+          "text": "var:preset|color|marfil"
         },
         "border": {
           "radius": "0.4rem"
