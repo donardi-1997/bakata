@@ -114,6 +114,13 @@ jobs:
           php scripts/test-dropify-catalog-bridge.php
           python3 -m intelligence.dropify_bridge --db /tmp/bakata-dropify-bridge.sqlite ingest /tmp/bakata-dropify-bridge-fixture.json --operator ci-fixture
           python3 -m intelligence.dropify_bridge --db /tmp/bakata-dropify-bridge.sqlite candidates --store 7 --in-stock | python3 -c 'import json,sys; rows=json.load(sys.stdin); assert len(rows)==1 and rows[0]["base_price"]=="7000.25" and rows[0]["sku"]=="025216"'
+      - name: Intelligence catalog review — archived page export and PHP validation
+        env:
+          PYTHONPATH: services/intelligence
+        run: |
+          sha=$(sha256sum /tmp/bakata-dropify-bridge-fixture.json | cut -d ' ' -f 1)
+          python3 -m intelligence.catalog_review --db /tmp/bakata-dropify-bridge.sqlite --page-sha256 "$sha" > /tmp/bakata-catalog-review.json
+          php scripts/test-catalog-review.php < /tmp/bakata-catalog-review.json
       - name: Intelligence Dropify — visible catalog export and offline archive
         env:
           PYTHONPATH: services/intelligence

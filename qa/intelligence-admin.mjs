@@ -38,6 +38,11 @@ try {
   assert.equal(await rp.getByRole('heading',{name:'Bakatá Intelligence',exact:true}).count(),0);
   const deniedPost=await restricted.request.post(base+'/wp-admin/admin-post.php',{form:{action:'bakata_intelligence_clear'}});
   assert.equal(deniedPost.status(),403);
+  const catalogUrl=base+'/wp-admin/admin.php?page=bakata-catalog-review';
+  const catalogDenied=await rp.goto(catalogUrl);
+  assert.equal(catalogDenied?.status(),403);
+  const catalogDeniedPost=await restricted.request.post(base+'/wp-admin/admin-post.php',{form:{action:'bakata_catalog_review_clear'}});
+  assert.equal(catalogDeniedPost.status(),403);
   await restricted.close();
   const admin=await context();
   const page=await login(admin,env.WP_ADMIN_USER,env.WP_ADMIN_PASSWORD);
@@ -63,6 +68,21 @@ try {
   await page.getByRole('heading',{name:'Resumen de datos simulados'}).waitFor();
   await Promise.all([page.waitForURL(u=>u.searchParams.get('bk_notice')==='cleared'),page.locator('#bk_clear').click()]);
   await page.getByRole('heading',{name:'Sin evaluaciones cargadas'}).waitFor();
+  await page.goto(catalogUrl);
+  await page.getByRole('heading',{name:'Sin catálogo cargado'}).waitFor();
+  const badCatalogNonce=await admin.request.post(base+'/wp-admin/admin-post.php',{form:{action:'bakata_catalog_review_clear'}});
+  assert.equal(badCatalogNonce.status(),403);
+  await page.locator('#bk-catalog-file').setInputFiles('/tmp/bakata-catalog-review.json');
+  await Promise.all([page.waitForURL(u=>u.searchParams.get('bk_catalog_notice')==='loaded'),page.locator('#bk_catalog_load').click()]);
+  await page.getByRole('heading',{name:'Captura archivada'}).waitFor();
+  assert((await page.locator('table.widefat tbody').innerText()).includes('025216'));
+  assert((await page.locator('table.widefat tbody').innerText()).includes('7000.25'));
+  assert((await page.locator('table.widefat tbody').innerText()).includes('Sin evaluación vinculada'));
+  await page.locator('#bk-catalog-stock').selectOption('zero');
+  await Promise.all([page.waitForURL(u=>u.searchParams.get('bk_stock')==='zero'),page.locator('#bk_catalog_filter').click()]);
+  await page.getByText('No hay candidatos para estos filtros.').waitFor();
+  await Promise.all([page.waitForURL(u=>u.searchParams.get('bk_catalog_notice')==='cleared'),page.locator('#bk_catalog_clear').click()]);
+  await page.getByRole('heading',{name:'Sin catálogo cargado'}).waitFor();
   await admin.close();
   console.log('Intelligence administrator preview passed.');
 } finally {await browser.close();}
