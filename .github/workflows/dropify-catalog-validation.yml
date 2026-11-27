@@ -4,7 +4,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/*dropify*'
-      - 'tools/dropify-quarantine/**'
+      - 'tools/dropify-quarantine/**'\n      - 'infra/research-worker/**'
       - '.github/workflows/dropify-catalog-validation.yml'
   workflow_dispatch:
 permissions:
@@ -16,7 +16,7 @@ jobs:
       group: dropify-catalog-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -43,6 +43,9 @@ jobs:
         run: |
           curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 90 --max-filesize 52428800 https://downloads.wordpress.org/plugin/woocommerce.latest-stable.zip -o /tmp/dropify-validation/woocommerce.zip
           bash scripts/test-dropify-wordpress-sandbox.sh /tmp/dropify-validation/dropify-catalog-validation.zip /tmp/dropify-validation/woocommerce.zip
+      - name: Rehearse CLI-only Fargate-style research worker without external network
+        run: |
+          bash scripts/test-dropify-research-worker.sh /tmp/dropify-validation/original.zip /tmp/dropify-validation/dropify-catalog-validation.zip /tmp/dropify-validation/woocommerce.zip
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: dropify-catalog-only-validation
