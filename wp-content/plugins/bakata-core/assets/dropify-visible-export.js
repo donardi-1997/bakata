@@ -40,7 +40,7 @@
         let value=cell.innerText.trim().replace(/\s+/g,' ');
         if (field==='title') {
           // WP list-table row actions are not part of product names.
-          const title=cell.querySelector('.row-title');
+          const title=cell.querySelector(':scope > strong, .row-title');
           if (title && visible(title)) value=title.innerText.trim().replace(/\s+/g,' ');
           else {
             // Do not read hidden descendants or guess names from opaque markup.
@@ -72,7 +72,7 @@
     button.textContent='Exportar página visible a Bakatá Intelligence';
     const status=document.createElement('p');
     status.setAttribute('role','status');
-    status.textContent='Solo esta página; no consulta Dropi ni importa productos.';
+    status.textContent='Solo esta página; el total mostrado por Dropify puede no ser real. No consulta Dropi ni importa productos.';
     button.addEventListener('click',()=>{
       try {
         const payload=collect();
