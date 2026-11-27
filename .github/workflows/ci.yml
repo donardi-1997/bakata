@@ -99,6 +99,14 @@ jobs:
         run: |
           npm --prefix qa install --ignore-scripts --no-audit --no-fund --package-lock=false
           qa/node_modules/.bin/playwright install --with-deps chromium
+      - name: Intelligence Dropify — visible catalog export and offline archive
+        env:
+          PYTHONPATH: services/intelligence
+        run: |
+          node --check wp-content/plugins/bakata-core/assets/dropify-visible-export.js
+          node qa/dropify-visible-export.mjs
+          python3 -m intelligence.dropify_catalog --db /tmp/bakata-dropify-fixture.sqlite ingest /tmp/bakata-dropify-visible-fixture.json --operator-ref ci-fixture
+          python3 -m intelligence.dropify_catalog --db /tmp/bakata-dropify-fixture.sqlite candidates --in-stock | python3 -c 'import json,sys; rows=json.load(sys.stdin); assert len(rows)==1 and rows[0]["displayed_spread"]==10000 and rows[0]["sku"]=="025216"'
       - name: Browser QA — administrator intelligence preview
         env:
           BAKATA_CI_FIXTURES: '1'
@@ -216,6 +224,13 @@ jobs:
           php -l scripts/test-intelligence-draft-ci.php
           export BAKATA_CI_INTELLIGENCE_SNAPSHOT="$(cat /tmp/bakata-job-result.json)"
           docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 -e BAKATA_CI_INTELLIGENCE_SNAPSHOT cli wp eval "$(tail -n +2 scripts/test-intelligence-draft-ci.php)"
+      - name: Intelligence Dropify — isolated read-only WooCommerce reconciliation
+        env:
+          BAKATA_CI_FIXTURES: '1'
+        run: |
+          php -l scripts/test-intelligence-dropify-ci.php
+          export BAKATA_CI_INTELLIGENCE_SNAPSHOT="$(cat /tmp/bakata-job-result.json)"
+          docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 -e BAKATA_CI_INTELLIGENCE_SNAPSHOT cli wp eval "$(tail -n +2 scripts/test-intelligence-dropify-ci.php)"
       - name: Order preview — isolated WooCommerce CRUD tests
         env:
           BAKATA_CI_FIXTURES: '1'

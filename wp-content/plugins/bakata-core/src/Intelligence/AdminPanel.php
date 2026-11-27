@@ -119,6 +119,7 @@ final class AdminPanel
         if (isset($notices[$notice])) {
             echo '<div role="status" class="notice notice-info"><p>' . esc_html($notices[$notice]) . '</p></div>';
         }
+        DropifyDiagnostics::render();
         echo '<h2>Cargar evaluación offline</h2><form method="post" enctype="multipart/form-data" action="' . esc_url(admin_url('admin-post.php')) . '">';
         echo '<input type="hidden" name="action" value="bakata_intelligence_preview">';
         wp_nonce_field('bakata_intelligence_preview', 'bk_int_upload_nonce', false);

@@ -1,0 +1,26 @@
+# INT-15B — Catálogo visible de Dropify
+
+El operador confirma que Dropify está instalado en dev.bakata.store, con token configurado y catálogo visible en wp-admin/admin.php?page=dropi-products. La captura aportada muestra 9.999 elementos y las columnas ID, SKU, Imagen, Nombre, Precio, Precio sugerido, Stock, Categoría, Bodega, Tienda y Actions. Esto acredita la visualización, no que 9.999 sea un total exhaustivo, que los datos estén cacheados localmente ni que sus precios/stock estén vigentes. No se ha inspeccionado el código de la instalación activa. El operador volvió a aportar el ZIP 4.7.3; su SHA-256 coincide con la auditoría anterior. No se presume que la instalación tenga esa versión ni los parches auditados.
+
+## Puente inmediato
+
+Bakatá Core encola un script exclusivamente en la página dropi-products para manage_options. El script reconoce una única tabla por encabezados visibles, sin consumir APIs, formularios, URLs de acciones, campos ocultos, HTML, imágenes ni tokens. Al hacer clic en «Exportar página visible a Bakatá Intelligence» genera un JSON local (máx. 100 filas/256 KiB); no navega, pagina, envía HTTP, copia el DOM completo ni pulsa Importar. Si cambian los encabezados o hay identidades repetidas, no exporta. Solo captura las filas ya renderizadas. El usuario debe seleccionar filtros y páginas desde Dropify, conforme a sus permisos. No automatizar navegación masiva; el conector podría consultar remotamente cada página.
+
+La estructura versionada bakata-dropify-visible-v1 conserva fecha del navegador, identificador Dropi, SKU como texto, nombre y columnas Precio, Precio sugerido, Stock, Categoría, Bodega y Tienda. No se incluyen URLs de imágenes ni acciones, datos personales, contenido oculto, tokens o cuenta autenticada. Un nombre/valor visible puede contener texto arbitrario; no es una certificación de privacidad. El formato se ha probado con tabla sintética derivada de la captura, no con la instalación real: si no reconoce la tabla, revisar markup exacto antes de modificar selectores.
+
+## Archivo comercial de preselección
+
+Desde services/intelligence:
+
+    python3 -m intelligence.dropify_catalog --db /ruta/privada/dropify-catalog.sqlite ingest /ruta/privada/pagina.json --operator-ref OPERADOR
+    python3 -m intelligence.dropify_catalog --db /ruta/privada/dropify-catalog.sqlite candidates --in-stock --limit 100 --offset 0
+
+Filtros opcionales --store, --category, --query (nombre, SKU o ID). Consultas por identidad tienda/ID con la última observación registrada; no se descarta histórico. La base independiente guarda hash SHA-256 del archivo, referencia local de operador, fecha, filas normalizadas y relación página/observación, no el JSON original. Replay exacto no duplica; conflictos en la misma fecha revierten todo. Los precios se interpretan solo como números enteros de la presentación (7.000 -> 7000), no como moneda confirmada ni costo. Vacío/guion es desconocido; cero se conserva. displayed_spread = suggested_price - display_price, NO margen ni contribución; sin moneda comprobada ni costos logísticos, fiscales o publicitarios. in-stock solo significa stock mostrado positivo, no stock fresco. No se infiere demanda ni se alimenta scoring automático. La fecha browser es una anotación de captura, no fecha de actualización del proveedor. El archivo no prueba completitud del catálogo.
+
+Límites: 2.000 páginas, 100.000 observaciones y 320 MiB del archivo principal por conexión; consultas de 100 filas y offset explícito. No hay limpieza automática ni cuota del volumen. Almacenar archivos y base fuera del repositorio, con permisos restrictivos. El archivo se mantiene separado de commercial.sqlite porque las filas visibles no satisfacen aún el contrato de fuente comercial revisada de INT-12.
+
+## Validación y siguiente paso
+
+Se corrigió el fallo de INT-15 original (CI 45916258371): WooCommerce devuelve listas de metadata con índices no consecutivos al eliminar y añadir entradas. Se usa array_values antes de validar exactamente una entrada; no se relaja la detección de duplicados o variantes. Se mantienen pruebas de integración reales de WooCommerce. Se agregan pruebas Python de ingestión, filtros, desconocidos, replay y rollback; QA browser con fixture, bloqueo por duplicado/estructura y verificación cruzada de JSON en SQLite. No se ha ejecutado en dev, desplegado ni verificado el resultado del nuevo CI.
+
+La inspección del ZIP 4.7.3 confirma que la tabla se alimenta de una consulta remota del conector, no de un catálogo local. No automatizar su recorrido hasta confirmar la versión instalada, corregir los hallazgos de seguridad y obtener autorización de frecuencia/condiciones. Consultar docs/intelligence-dropify-source-contract.md. El diagnóstico local en Bakatá Intelligence compara la versión declarada y cinco archivos con el ZIP original sin leer tokens. Después: normalizar fuente, costo y moneda confirmados, mapear categorías a taxonomía Bakatá con revisión, establecer comparables autorizados y almacenar evaluaciones con evidencia. No inventar señales de mercado ni publicar productos. No se ha consultado directamente Dropi, reutilizado token, cambiado stock/precio, instalado cron o disparado importaciones.

@@ -42,6 +42,8 @@ try {
   const admin=await context();
   const page=await login(admin,env.WP_ADMIN_USER,env.WP_ADMIN_PASSWORD);
   await page.goto(url);
+  await page.getByRole('heading',{name:'Diagnóstico local de Dropify'}).waitFor();
+  await page.getByText('No se detectó el conector en la ruta estándar.').waitFor();
   await page.getByRole('heading',{name:'Sin evaluaciones cargadas'}).waitFor();
   await page.locator('#bk-snapshot').setInputFiles('/tmp/bakata-intelligence-preview.json');
   await Promise.all([page.waitForURL(u=>u.searchParams.get('bk_notice')==='loaded'),page.locator('#bk_upload').click()]);
