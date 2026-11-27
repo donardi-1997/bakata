@@ -16,6 +16,7 @@ class Pair:
     run: str
     until: int
     at: int
+    nonce: str
     proxy: Member = Member()
     worker: Member = Member()
 
@@ -44,14 +45,17 @@ def replay(events):
             raise ValueError("Invalid event")
         kind = event.get("type")
         if state is None:
-            if (set(event) != {"type", "run", "at", "until"} or kind != "authorize"
+            # The nonce makes each authorization unique even if run/until repeat.
+            if (set(event) != {"type", "run", "at", "until", "nonce"} or kind != "authorize"
                 or not isinstance(event["run"], str)
-                or not re.fullmatch(r"fixture-[A-Za-z0-9_-]{1,56}", event["run"])):
+                or not re.fullmatch(r"fixture-[A-Za-z0-9_-]{1,56}", event["run"])
+                or not isinstance(event["nonce"], str)
+                or not re.fullmatch(r"[0-9a-f]{32}", event["nonce"])):
                 raise ValueError("Invalid authorization")
             at, until = _time(event["at"]), _time(event["until"])
             if not at + 60 <= until <= at + 1800:
                 raise ValueError("Invalid deadline")
-            state = Pair(event["run"], until, at)
+            state = Pair(event["run"], until, at, event["nonce"])
             continue
         schemas = {
             "claim-launch": {"type", "role", "at"},

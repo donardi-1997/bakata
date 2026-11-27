@@ -7,7 +7,7 @@ import unittest
 from intelligence.research_pair_ledger import Conflict, Ledger
 
 
-AUTH = {"type": "authorize", "run": "fixture-test", "at": 100, "until": 400}
+AUTH = {"type": "authorize", "run": "fixture-test", "at": 100, "until": 400, "nonce": "0" * 32}
 CLAIM = {"type": "claim-launch", "role": "proxy", "at": 101}
 
 

@@ -5,7 +5,8 @@ from intelligence.research_pair_contract import replay
 
 class PairContractTests(unittest.TestCase):
     def setUp(self):
-        self.events = [{"type": "authorize", "run": "fixture-test", "at": 100, "until": 400}]
+        self.events = [{"type": "authorize", "run": "fixture-test", "at": 100, "until": 400,
+                        "nonce": "0" * 32}]
 
     def add(self, kind, role, at=101, **fields):
         self.events.append(dict(type=kind, role=role, at=at, **fields))
