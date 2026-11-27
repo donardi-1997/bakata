@@ -52,6 +52,9 @@ def coordinate(exchange,receipts,plan,*,clock=time.time,sleep=time.sleep):
         pages+=1
         rows+=result["rows"]
         if result["state"]!="open":
+            done=wait_file(exchange/"done.json",deadline,clock=clock,sleep=sleep)
+            if json.loads(read_record(done,4096),object_pairs_hook=unique)!={"run":plan["run"],"calls":2} or pages!=2 or rows!=13 or result["state"]!="terminal-page-observed":
+                raise ValueError("Unexpected fixture completion")
             return {"state":result["state"],"pages":pages,"rows":rows,"coverage_verified":False,"provider_queries":0}
     raise ValueError("Fixture did not terminate")
 

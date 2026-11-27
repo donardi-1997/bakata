@@ -76,3 +76,21 @@ with sqlite3.connect(sys.argv[2]) as db:
     assert sum(archive.ingest(x,"ci-research",now)["inserted"] for x in raw)==0
 print("CLI-only research worker: 13 distinct synthetic products, localhost DB, immutable root and no commercial mutations.")
 PY
+
+# Separate fresh database for the persistent fixture; no real AWS network.
+docker rm -fv "$worker" "$db" >/dev/null
+docker run -d --pull=never --name "$db" --network "$net" --memory 512m --cpus .5 \
+  -e MARIADB_DATABASE=fixture -e MARIADB_USER=fixture -e MARIADB_PASSWORD=ci-research-only \
+  -e MARIADB_ROOT_PASSWORD=ci-research-root-only mariadb:11.4 >/dev/null
+for i in $(seq 1 60); do
+  if docker exec "$db" healthcheck.sh --connect --innodb_initialized >/dev/null 2>&1; then break; fi
+  test "$i" -lt 60
+  sleep 2
+done
+mkdir "$temp/exchange"
+# Both fixture processes run with UID 33 inside the task; hosted runner can
+# access this temporary directory for the emulated coordinator test only.
+chmod 0777 "$temp/exchange"
+PYTHONPATH="$repo/services/intelligence" AWS_EC2_METADATA_DISABLED=true \
+  "${BAKATA_RESEARCH_TEST_PYTHON:?Test-only emulator Python required}" \
+  "$repo/scripts/test-research-worker-persistence.py" "$temp/exchange" "$db" "$image" "$worker"
