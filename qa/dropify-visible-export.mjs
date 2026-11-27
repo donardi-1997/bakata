@@ -7,7 +7,7 @@ try {
   const page = await browser.newPage({acceptDownloads:true});
   await page.route('**/*', route => route.abort());
   const header = '<thead><tr><th><input type="checkbox"></th><th><a><span>ID</span><span>sort</span></a></th><th>SKU</th><th>Imagen</th><th>Nombre</th><th>Precio</th><th>Precio sugerido</th><th>Stock</th><th>Categoría</th><th>Bodega</th><th>Tienda</th><th>Actions</th></tr></thead>';
-  const row = '<tr><td><input value="hidden-canary"></td><td>96</td><td>025216</td><td><img alt="opaque-canary"></td><td>Producto de prueba<br><a>Importar</a><span hidden>secret-canary</span></td><td>7.000</td><td>17.000</td><td>412</td><td>Otro</td><td>Fixture</td><td>fixture-store</td><td><a href="https://example.invalid/private?token=secret-canary">Acción</a></td></tr>';
+  const row = '<tr><td><input value="hidden-canary"></td><td>96</td><td>025216</td><td><img alt="opaque-canary"></td><td><strong>Producto de prueba</strong><div class="row-actions"><a>Importar</a></div><span hidden>secret-canary</span></td><td>7.000</td><td>17.000</td><td>412</td><td>Otro</td><td>Fixture</td><td>fixture-store</td><td><a href="https://example.invalid/private?token=secret-canary">Acción</a></td></tr>';
   await page.setContent('<table>'+header+'<tbody>'+row+'</tbody></table>');
   await page.addScriptTag({content:await readFile(script,'utf8')});
   const button=page.getByRole('button',{name:'Exportar página visible a Bakatá Intelligence'});
