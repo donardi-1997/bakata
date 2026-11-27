@@ -2,7 +2,7 @@
 // Injected only into the hash-pinned catalog validation build.
 function bakata_catalog_offset($page, $size)
 {
-    if (!is_int($page) || $page < 1 || $page > 100 || !is_int($size) || $size < 1 || $size > 20) {
+    if (!is_int($page) || $page < 1 || $page > 2000 || !is_int($size) || $size < 1 || $size > 20) {
         throw new InvalidArgumentException('Invalid catalog page.');
     }
     return ($page - 1) * $size;
@@ -98,7 +98,7 @@ function bakata_catalog_render($list)
         $query = isset($_POST['bk_query']) && is_string($_POST['bk_query']) ? sanitize_text_field(wp_unslash($_POST['bk_query'])) : '';
         try {
             if (!preg_match('/\A[1-9][0-9]{0,9}\z/D', $store)
-                || !preg_match('/\A[1-9][0-9]{0,2}\z/D', $rawPage) || strlen($query)>120) {
+                || !preg_match('/\A[1-9][0-9]{0,3}\z/D', $rawPage) || strlen($query)>120) {
                 throw new InvalidArgumentException('Invalid catalog filters.');
             }
             $page=(int)$rawPage;
@@ -130,7 +130,7 @@ function bakata_catalog_render($list)
         echo '<option value="'.esc_attr($id).'"'.selected($store,$id,false).'>'.esc_html(bakata_catalog_text($entry->store ?? null,190)).'</option>';
     }
     echo '</select> <label for="bk-query">Buscar</label> <input id="bk-query" name="bk_query" maxlength="120" value="'.esc_attr($query).'">';
-    echo ' <label for="bk-page">Página</label> <input type="number" id="bk-page" name="bk_page" min="1" max="100" value="'.esc_attr((string)$page).'" required>';
+    echo ' <label for="bk-page">Página</label> <input type="number" id="bk-page" name="bk_page" min="1" max="2000" value="'.esc_attr((string)$page).'" required>';
     submit_button('Consultar una página autorizada','primary','bk_submit',false);
     echo '</form>';
     if ($error) { echo '<p role="alert">Consulta bloqueada o fallida. Revisar manualmente; no reintentar automáticamente.</p>'; }
@@ -168,7 +168,7 @@ function bakata_catalog_batch_scope($run,$store,$page)
         || !is_string($store) || !preg_match('/\A[1-9][0-9]{0,9}\z/D',$store)
         || !defined('BAKATA_DROPIFY_BATCH_FIRST') || !defined('BAKATA_DROPIFY_BATCH_LAST')
         || !is_int(BAKATA_DROPIFY_BATCH_FIRST) || !is_int(BAKATA_DROPIFY_BATCH_LAST)
-        || BAKATA_DROPIFY_BATCH_FIRST < 1 || BAKATA_DROPIFY_BATCH_LAST > 100
+        || BAKATA_DROPIFY_BATCH_FIRST < 1 || BAKATA_DROPIFY_BATCH_LAST > 2000
         || BAKATA_DROPIFY_BATCH_LAST < BAKATA_DROPIFY_BATCH_FIRST
         || BAKATA_DROPIFY_BATCH_LAST-BAKATA_DROPIFY_BATCH_FIRST >= 10
         || !is_int($page) || $page < BAKATA_DROPIFY_BATCH_FIRST || $page > BAKATA_DROPIFY_BATCH_LAST
