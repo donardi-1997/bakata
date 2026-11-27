@@ -87,7 +87,7 @@ final class DropifyPreview
 
         // Read only the observed identity fields. Never export the opaque
         // _dropi_product payload or the connector's token/credential fields.
-        $ids = $product->get_meta('_dropi_product_id', false, 'edit');
+        $ids = array_values($product->get_meta('_dropi_product_id', false, 'edit'));
         if (!is_array($ids) || count($ids) !== 1 || !$ids[0] instanceof \WC_Meta_Data) {
             throw new RuntimeException('Missing or ambiguous Dropi product identity.');
         }
