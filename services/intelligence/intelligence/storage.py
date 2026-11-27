@@ -10,6 +10,7 @@ import re
 import sqlite3
 
 from .commercial import Capture, import_capture
+from .sources import SourceKind
 from .matching import approve_pair, compare
 from .models import Observation
 from .normalization import normalize_product
@@ -148,6 +149,8 @@ class CommercialStore:
         now=instant(now)
         batch=import_capture(registry,capture,now=now,external_id=external_id)
         spec=registry.get(capture.source,now)
+        if spec.kind is not SourceKind.JSON_LD and external_id is not None:
+            raise ValueError("External ID override is only allowed for JSON-LD")
         ev=batch.evidence
         at=instant(ev.observed_at).isoformat()
         expiry=instant(spec.approved_until).isoformat()
@@ -167,6 +170,7 @@ class CommercialStore:
             self._capacity("captures",MAX_CAPTURES)
             self.db.execute("INSERT INTO captures VALUES (?,?,?,?,?,?,?,?,?)",values)
             inserted=0
+            available=MAX_OBSERVATIONS-self.db.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
             for row in batch.observations:
                 self.db.execute("INSERT OR IGNORE INTO products VALUES (?,?)",row.key[:2])
                 payload=(row.title,row.url,row.currency,row.price_minor)
@@ -175,7 +179,8 @@ class CommercialStore:
                 if old is not None and old!=payload:
                     raise ValueError("Conflicting observation")
                 if old is None:
-                    self._capacity("observations",MAX_OBSERVATIONS)
+                    if inserted>=available:
+                        raise ValueError("Archive observation capacity reached")
                     self.db.execute("INSERT INTO observations VALUES (?,?,?,?,?,?,?)",row.key+payload)
                     inserted+=1
                 self.db.execute("INSERT INTO capture_observations VALUES (?,?,?,?)",(key,)+row.key)
