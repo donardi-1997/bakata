@@ -121,6 +121,13 @@ jobs:
           sha=$(sha256sum /tmp/bakata-dropify-bridge-fixture.json | cut -d ' ' -f 1)
           python3 -m intelligence.catalog_review --db /tmp/bakata-dropify-bridge.sqlite --page-sha256 "$sha" > /tmp/bakata-catalog-review.json
           php scripts/test-catalog-review.php < /tmp/bakata-catalog-review.json
+      - name: Intelligence profitability — synthetic dossier contract
+        env:
+          PYTHONPATH: services/intelligence
+          BAKATA_CI_FIXTURES: '1'
+        run: |
+          python3 scripts/fixture-profitability-panel.py > /tmp/bakata-profitability.json
+          php scripts/test-profitability-panel.php < /tmp/bakata-profitability.json
       - name: Intelligence Dropify — visible catalog export and offline archive
         env:
           PYTHONPATH: services/intelligence
