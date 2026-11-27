@@ -1,0 +1,26 @@
+name: Research AWS foundation validation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/research-aws/**'
+      - 'scripts/test-research-aws-foundation.py'
+      - '.github/workflows/research-aws-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Test dormant infrastructure safety contract
+        run: python3 scripts/test-research-aws-foundation.py -v
+      - name: Validate CloudFormation resource schemas
+        run: |
+          python3 -m venv /tmp/bk-cfn-lint
+          /tmp/bk-cfn-lint/bin/pip install 'cfn-lint>=1.0,<2'
+          /tmp/bk-cfn-lint/bin/cfn-lint --regions us-east-1 --non-zero-exit-code error --template infra/research-aws/foundation.json
