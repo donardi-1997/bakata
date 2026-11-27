@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from intelligence.research_pair_controller import BIND_GRACE, PairConfig, PairController
+from intelligence.research_pair_controller import BIND_GRACE, MIN_EFFECT_SECONDS, PairConfig, PairController
 from intelligence.research_pair_ledger import Conflict, Ledger
 
 ACCOUNT = "123456789012"
@@ -432,6 +432,40 @@ class PairControllerTests(unittest.TestCase):
         self.set_status(proxy, "PENDING", "RUNNING")
         self.assertEqual(self.ctl.supervise()["state"], "running")
         self.assertEqual(self.ecs.count("stop"), 0)
+
+    def test_no_claim_without_invocation_time_for_the_effect(self):
+        low = PairController(self.ledger, self.ecs, config(), clock=lambda: self.now, enabled=True,
+                             remaining=lambda: MIN_EFFECT_SECONDS - 0.1)
+        with self.assertRaisesRegex(ValueError, "Insufficient invocation time"):
+            low.launch("proxy")
+        self.assertEqual((self.events(), self.ecs.count("run")), (["authorize:"], 0))
+        proxy = self.ctl.launch("proxy")
+        self.now = UNTIL
+        with self.assertRaisesRegex(ValueError, "Insufficient invocation time"):
+            low.supervise()
+        self.assertNotIn("claim-stop:proxy", self.events())
+        self.assertEqual(self.ecs.count("stop"), 0)
+        ok = PairController(self.ledger, self.ecs, config(), clock=lambda: self.now, enabled=True,
+                            remaining=lambda: float(MIN_EFFECT_SECONDS))
+        self.assertEqual(ok.supervise()["requested"], ["proxy"])  # a later invocation still stops it
+        self.assertEqual(self.ecs.stopped(), [proxy])
+        with self.assertRaises(ValueError):
+            PairController(self.ledger, self.ecs, config(), clock=lambda: NOW, remaining=30)
+
+    def test_second_stop_postponed_to_next_invocation_when_time_runs_out(self):
+        proxy, worker = self.launch_pair()
+        self.now = UNTIL
+        budget = iter([MIN_EFFECT_SECONDS + 10, MIN_EFFECT_SECONDS - 1])  # time drains during the tick
+        tick = PairController(self.ledger, self.ecs, config(), clock=lambda: self.now, enabled=True,
+                              remaining=lambda: next(budget))
+        with self.assertRaisesRegex(ValueError, "worker.*Insufficient invocation time"):
+            tick.supervise()
+        self.assertEqual(self.ecs.stopped(), [proxy])
+        self.assertNotIn("claim-stop:worker", self.events())
+        fresh = PairController(self.ledger, self.ecs, config(), clock=lambda: self.now, enabled=True,
+                               remaining=lambda: 110.0)
+        self.assertEqual(fresh.supervise()["requested"], ["worker"])  # proxy is already stopping
+        self.assertEqual(self.ecs.stopped(), [proxy, worker])
 
     def test_hostile_ecs_responses_fail_closed_as_value_error(self):
         proxy = self.ctl.launch("proxy")

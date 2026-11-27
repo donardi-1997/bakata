@@ -35,6 +35,11 @@ PLATFORM = "1.4.0"
 LAUNCH_MARGIN = 30
 BIND_GRACE = 120  # a newer unbound claim may be an in-flight launch
 BIND_ATTEMPTS = 3
+# Seconds an invocation must still have before persisting a claim. Worst path is the
+# worker launch: claim read+write, proxy recheck, RunTask (4 calls, ~8 s each with
+# the handler's 3 s connect / 5 s read timeouts; read_timeout bounds each socket
+# read, not a whole request) plus the bind. 60 s leaves margin within a 120 s timeout.
+MIN_EFFECT_SECONDS = 60
 
 
 class UnsafeTask(ValueError):
@@ -107,11 +112,19 @@ class PairConfig:
 
 
 class PairController:
-    def __init__(self, ledger, ecs, config, *, clock, enabled=False):
+    def __init__(self, ledger, ecs, config, *, clock, enabled=False, remaining=None):
         if not isinstance(ledger, (Ledger, DynamoLedger)) or not isinstance(config, PairConfig) or not callable(clock):
             raise ValueError("Reviewed ledger, configuration and clock required")
+        if remaining is not None and not callable(remaining):
+            raise ValueError("Remaining-time callable required")
         self.ledger, self.ecs, self.config, self.clock = ledger, ecs, config, clock
+        self.remaining = remaining  # seconds left in this invocation (Lambda); None offline
         self.enabled = enabled is True
+
+    def _require_time_for_effect(self):
+        """Never persist a claim that this invocation may not live to act on."""
+        if self.remaining is not None and self.remaining() < MIN_EFFECT_SECONDS:
+            raise ValueError("Insufficient invocation time; no claim persisted")
 
     def _require_enabled(self):
         if not self.enabled:
@@ -228,6 +241,7 @@ class PairController:
                 raise ValueError("Bound live proxy required")
             if self._describe(state, "proxy", proxy.identity) != "running":
                 raise ValueError("Proxy not RUNNING")
+        self._require_time_for_effect()
         # The reducer refuses a second claim for the same role; Conflict means no claim.
         self.ledger.append(revision, {"type": "claim-launch", "role": role, "at": now})
         # A claim is not authority for a late effect: recheck time and peer after persisting it.
@@ -359,6 +373,7 @@ class PairController:
             if member.stop_claimed:
                 # A previous invocation may have crashed after claiming. Never repeat StopTask.
                 raise ValueError("Uncertain %s stop; manual reconciliation required" % role)
+            self._require_time_for_effect()
             self.ledger.append(revision, {"type": "claim-stop", "role": role, "at": _now(self.clock())})
             reply = _dict(self.ecs.stop_task(cluster=self.config.cluster, task=member.identity,
                                              reason="Bakata research fixture pair terminated"))

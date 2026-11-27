@@ -42,6 +42,8 @@ MUTATIONS = {
                                  "except ZeroDivisionError as exc:  # identity unverified"),
     "foreign subnet accepted": ('if subnets and subnets != {getattr(c, role + "_subnet")}:', "if False:"),
     "running without ENI accepted": ('if last == "RUNNING" and not subnets:', "if False:"),
+    "claim without invocation time": ("if self.remaining is not None and self.remaining() < MIN_EFFECT_SECONDS:",
+                                      "if False:"),
     "skewed claim defers reconcile": ("abs(now - claimed_at[role])", "(now - claimed_at[role])"),
     "supervise ignores enabled": (
         '        """Tick: never launches, never releases the slot; isolates failures per role."""\n'
