@@ -1,0 +1,15 @@
+# INT-18F: CLI-only, fixture-only image. No web server or live credential path.
+FROM wordpress:php8.3-apache AS wordpress-core
+FROM wordpress:cli-php8.3
+USER root
+WORKDIR /opt/bakata
+COPY --from=wordpress-core /usr/src/wordpress/ /opt/bakata/wp/
+COPY plugins/ /opt/bakata/wp/wp-content/plugins/
+COPY sandbox-fixture.php /opt/bakata/wp/wp-content/mu-plugins/sandbox-fixture.php
+COPY wp-config.php /opt/bakata/wp/wp-config.php
+COPY dropify-capture-page.php /opt/bakata/dropify-capture-page.php
+COPY run-fixture.sh /opt/bakata/run-fixture.sh
+RUN chmod 0555 /opt/bakata/run-fixture.sh && chmod -R a+rX /opt/bakata/wp
+ENV HOME=/tmp WP_CLI_CACHE_DIR=/tmp/wp-cli-cache BAKATA_DROPIFY_SANDBOX=1
+USER 33:33
+ENTRYPOINT ["/bin/sh","/opt/bakata/run-fixture.sh"]
