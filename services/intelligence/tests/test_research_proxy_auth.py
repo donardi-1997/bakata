@@ -1,13 +1,14 @@
 """Loopback TLS with ephemeral certs. X509 strict is enabled on the client only."""
 import asyncio
 import hashlib
+import hmac
 from pathlib import Path
 import ssl
 import subprocess
 import tempfile
 import time
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from intelligence.research_proxy import PilotProxy
 from intelligence.research_proxy_auth import authenticated_handler, server_context
@@ -140,21 +141,42 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         self.assert_no_proxy_activity()
 
     async def test_valid_but_unpinned_client_reaches_auth_not_proxy(self):
-        reader,writer=await asyncio.open_connection("127.0.0.1",self.port,
-            ssl=self.client_context("other"),server_hostname="proxy.fixture.invalid")
-        try:
-            await asyncio.wait_for(self.handled.wait(),3)
-            other=ssl.PEM_cert_to_DER_cert((self.path/"other.pem").read_text())
-            self.assertEqual(self.peer_pin,hashlib.sha256(other).hexdigest())
-            self.assertNotEqual(self.peer_pin,self.pin)
-            self.assertEqual(await asyncio.wait_for(reader.read(),3),b"")
-            self.assert_no_proxy_activity()
-        finally:
-            writer.close()
-            await writer.wait_closed()
+        compare_digest=hmac.compare_digest
+        results=[]
+        def observe_comparison(actual,authorized):
+            result=compare_digest(actual,authorized)
+            results.append(result)
+            return result
+        with patch("intelligence.research_proxy_auth.hmac.compare_digest",
+                   side_effect=observe_comparison) as comparison:
+            reader,writer=await asyncio.open_connection("127.0.0.1",self.port,
+                ssl=self.client_context("other"),server_hostname="proxy.fixture.invalid")
+            try:
+                await asyncio.wait_for(self.handled.wait(),3)
+                other=ssl.PEM_cert_to_DER_cert((self.path/"other.pem").read_text())
+                other_pin=hashlib.sha256(other).hexdigest()
+                self.assertEqual(self.peer_pin,other_pin)
+                self.assertNotEqual(self.peer_pin,self.pin)
+                self.assertEqual(await asyncio.wait_for(reader.read(),3),b"")
+                comparison.assert_called_once_with(other_pin,self.pin)
+                self.assertEqual(results,[False])
+                self.assert_no_proxy_activity()
+            finally:
+                writer.close()
+                await writer.wait_closed()
 
     async def test_pinned_client_reaches_proxy(self):
-        await self.request("worker")
+        compare_digest=hmac.compare_digest
+        results=[]
+        def observe_comparison(actual,authorized):
+            result=compare_digest(actual,authorized)
+            results.append(result)
+            return result
+        with patch("intelligence.research_proxy_auth.hmac.compare_digest",
+                   side_effect=observe_comparison) as comparison:
+            await self.request("worker")
+        comparison.assert_called_once_with(self.pin,self.pin)
+        self.assertEqual(results,[True])
         self.assertTrue(self.handled.is_set())
         self.resolve.assert_awaited_once()
         self.dial.assert_awaited_once()
