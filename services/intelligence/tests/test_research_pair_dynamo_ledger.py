@@ -15,7 +15,16 @@ except ImportError:  # the intelligence image has no AWS SDK
 from intelligence.research_pair_contract import replay
 from intelligence.research_pair_ledger import Conflict
 
-TEMPLATE = Path(__file__).resolve().parents[3] / "infra" / "research-aws" / "pair-controller.json"
+def _find_template():
+    # The intelligence image copies only intelligence/ and tests/: the template may be absent.
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "infra" / "research-aws" / "pair-controller.json"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+TEMPLATE = _find_template()
 TABLE = "bakata-research-ci-pair-ledger"
 NONCE = "0" * 32
 
@@ -26,6 +35,7 @@ def auth(nonce=NONCE):
 
 
 @unittest.skipIf(boto3 is None, "boto3/moto not installed")
+@unittest.skipIf(TEMPLATE is None, "repository infra/ not available (intelligence image)")
 class DynamoLedgerTests(unittest.TestCase):
     def setUp(self):
         from intelligence.research_pair_dynamo_ledger import DynamoLedger
