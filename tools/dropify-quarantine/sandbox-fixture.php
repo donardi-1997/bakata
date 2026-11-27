@@ -4,6 +4,23 @@
  * Test-only MU plugin, never packaged with Dropify.
  */
 defined('ABSPATH') || exit;
+// During the CLI-only fresh install, home_url() is not yet backed by options.
+// This branch can only deny HTTP; it never defines catalog approvals or reads options.
+if (getenv('BAKATA_RESEARCH_BOOTSTRAP') === '1') {
+    if (getenv('BAKATA_RESEARCH_FIXTURE') !== '1' || getenv('BAKATA_DROPIFY_SANDBOX') !== '1'
+        || PHP_SAPI !== 'cli' || !defined('WP_CLI') || WP_CLI !== true
+        || wp_get_environment_type() !== 'staging'
+        || !defined('WP_HOME') || WP_HOME !== 'http://localhost'
+        || !defined('WP_SITEURL') || WP_SITEURL !== 'http://localhost'
+        || !defined('DB_HOST') || DB_HOST !== '127.0.0.1:3306'
+        || !defined('DB_NAME') || DB_NAME !== 'fixture') {
+        throw new RuntimeException('Refusing research bootstrap outside isolated CLI fixture.');
+    }
+    add_filter('pre_http_request', static function () {
+        return new WP_Error('bk_fixture_bootstrap_offline','All external HTTP blocked during bootstrap.');
+    }, PHP_INT_MAX, 3);
+    return;
+}
 if (getenv('BAKATA_DROPIFY_SANDBOX') !== '1' || wp_get_environment_type() !== 'staging'
     || home_url() !== 'http://localhost') {
     throw new RuntimeException('Refusing catalog fixture outside the disposable sandbox.');

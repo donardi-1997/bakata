@@ -7,7 +7,8 @@ test "${BAKATA_DROPIFY_SANDBOX:-}" = 1
 # Refuse nonempty DB; don't resume a destroyed task with ephemeral receipts.
 php -r '$db=new mysqli("127.0.0.1","fixture","ci-research-only","fixture",3306); if($db->query("SHOW TABLES")->num_rows!==0) exit(1);'
 wpcli() { wp --path=/opt/bakata/wp "$@"; }
-wpcli core install --url=http://localhost --title='Isolated research fixture' --admin_user=sandbox_admin --admin_email=admin@example.invalid --admin_password=ci-research-admin-only --skip-email >&2
+BAKATA_RESEARCH_BOOTSTRAP=1 wpcli core install --url=http://localhost --title='Isolated research fixture' --admin_user=sandbox_admin --admin_email=admin@example.invalid --admin_password=ci-research-admin-only --skip-email >&2
+wpcli eval 'if(home_url()!=="http://localhost" || site_url()!=="http://localhost" || wp_get_environment_type()!=="staging" || defined("BAKATA_DROPIFY_CATALOG_READ")) throw new RuntimeException("Invalid installed fixture identity");' >&2
 wpcli plugin activate woocommerce wc-dropi-integration >&2
 wpcli option update woocommerce_default_country CO >&2
 wpcli option update woocommerce_currency COP >&2
