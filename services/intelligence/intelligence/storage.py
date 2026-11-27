@@ -17,7 +17,7 @@ from .normalization import normalize_product
 from .scoring import evaluate
 
 APPLICATION_ID = 0x424B4931
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MAX_DB_BYTES = 320 * 1024 * 1024
 MAX_CAPTURES = 10000
 MAX_OBSERVATIONS = 100000
@@ -69,6 +69,31 @@ SCHEMA = (
     "CREATE INDEX evaluations_history ON evaluations(source,external_id,observed_at,as_of,id)",
     "CREATE INDEX captures_source_time ON captures(source,observed_at,id)",
     "CREATE INDEX capture_observation_lookup ON capture_observations(source,external_id,observed_at)",
+)
+
+# Migration v1 -> v2: prospective evaluation cohorts and aggregate outcomes.
+SCHEMA_V2 = (
+    """CREATE TABLE calibration_cohorts (
+        id TEXT PRIMARY KEY, starts_at TEXT NOT NULL, ends_at TEXT NOT NULL,
+        created_at TEXT NOT NULL, minimum_orders INTEGER NOT NULL,
+        exposure_ref TEXT NOT NULL, actor_ref TEXT NOT NULL
+    )""",
+    """CREATE TABLE calibration_members (
+        cohort_id TEXT NOT NULL REFERENCES calibration_cohorts(id),
+        product_group TEXT NOT NULL, evaluation_id TEXT NOT NULL REFERENCES evaluations(id),
+        source TEXT NOT NULL, external_id TEXT NOT NULL, enrolled_at TEXT NOT NULL,
+        evaluation_sha256 TEXT NOT NULL,
+        PRIMARY KEY(cohort_id,product_group),
+        UNIQUE(cohort_id,source,external_id), UNIQUE(cohort_id,evaluation_id)
+    )""",
+    """CREATE TABLE calibration_outcomes (
+        cohort_id TEXT NOT NULL, product_group TEXT NOT NULL, recorded_at TEXT NOT NULL,
+        fulfilled_orders INTEGER NOT NULL, returned_orders INTEGER NOT NULL,
+        gross_minor INTEGER NOT NULL, contribution_minor INTEGER NOT NULL,
+        evidence_ref TEXT NOT NULL, actor_ref TEXT NOT NULL,
+        PRIMARY KEY(cohort_id,product_group),
+        FOREIGN KEY(cohort_id,product_group) REFERENCES calibration_members(cohort_id,product_group)
+    )""",
 )
 
 
@@ -127,8 +152,13 @@ class CommercialStore:
                     db.execute(statement)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute("PRAGMA user_version=1")
-            elif app!=APPLICATION_ID or version!=SCHEMA_VERSION:
+                app,version=APPLICATION_ID,1
+            if app!=APPLICATION_ID or version not in (1,SCHEMA_VERSION):
                 raise ValueError("Unsupported commercial archive schema")
+            if version==1:
+                for statement in SCHEMA_V2:
+                    db.execute(statement)
+                db.execute("PRAGMA user_version=2")
 
     @contextmanager
     def transaction(self):
