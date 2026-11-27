@@ -101,7 +101,7 @@ function bakata_catalog_render($list)
             $page=(int)$rawPage;
             $size=10;
             $offset=bakata_catalog_offset($page,$size);
-            $known=array_filter($list->tokens, static function ($entry) use ($store) {
+            $known=array_filter(is_array($list->tokens) ? $list->tokens : array(), static function ($entry) use ($store) {
                 return isset($entry->id) && (string)$entry->id===$store;
             });
             if (count($known)!==1) { throw new InvalidArgumentException('Choose one configured store.'); }
@@ -121,7 +121,7 @@ function bakata_catalog_render($list)
     echo '<form method="post" action="' . esc_url(admin_url('admin.php?page=dropi-products')) . '">';
     wp_nonce_field('bk_catalog_read');
     echo '<input type="hidden" name="bk_catalog_read" value="1"><label for="bk-store">Tienda</label> <select name="bk_store" id="bk-store" required><option value="">Seleccionar</option>';
-    foreach ($list->tokens as $entry) {
+    foreach (is_array($list->tokens) ? $list->tokens : array() as $entry) {
         $id=bakata_catalog_text($entry->id ?? null,10);
         if (!preg_match('/\A[1-9][0-9]{0,9}\z/D',$id)) { continue; }
         echo '<option value="'.esc_attr($id).'"'.selected($store,$id,false).'>'.esc_html(bakata_catalog_text($entry->store ?? null,190)).'</option>';
