@@ -4,7 +4,7 @@ defined('ABSPATH') || exit;
 if (!defined('WP_CLI') || !WP_CLI) { exit; }
 try {
     if (count($args)!==3 || !is_string($args[0]) || !is_string($args[1])
-        || !preg_match('/\A[1-9][0-9]{0,2}\z/D',$args[2]??'')) {
+        || !preg_match('/\A[1-9][0-9]{0,3}\z/D',$args[2]??'')) {
         throw new RuntimeException('Invalid arguments.');
     }
     [$run,$store,$pageRaw]=$args; $page=(int)$pageRaw;

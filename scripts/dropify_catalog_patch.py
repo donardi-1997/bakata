@@ -68,7 +68,7 @@ def patch_catalog(name, source):
                     && is_string($_POST['_wpnonce'])
                     && wp_verify_nonce(wp_unslash($_POST['_wpnonce']), 'bk_catalog_read')))
             || !is_int($per_page) || $per_page < 1 || $per_page > 20
-            || !is_int($current_page) || $current_page < 0 || $current_page > 1980
+            || !is_int($current_page) || $current_page < 0 || $current_page > 19990
             || !is_string($search) || strlen($search) > 120
             || $orderby !== 'id' || $order !== 'asc'
             || !is_string($store_filter) || !preg_match('/^[1-9][0-9]{0,9}$/D',$store_filter)) {

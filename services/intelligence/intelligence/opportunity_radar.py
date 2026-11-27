@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import sqlite3
 
-from .dropify_bridge import APP_ID, decode
+from .dropify_bridge import APP_ID, decode, MAX_CATALOG_PAGE
 from .dropify_catalog import unique
 from .storage import encode, instant
 
@@ -48,7 +48,7 @@ def page_refs(db, store, product, at):
         raise ValueError("Missing or excessive observation provenance")
     result=[]
     for sha,approval,query,page,size,p_at,p_store in rows:
-        if (p_at,p_store)!=(at,store) or not re.fullmatch(r"[0-9a-f]{64}",sha) or not re.fullmatch(r"[0-9a-f]{64}",query) or not re.fullmatch(r"[A-Za-z0-9._-]{1,128}",approval) or type(page) is not int or not 1<=page<=100 or type(size) is not int or not 1<=size<=20:
+        if (p_at,p_store)!=(at,store) or not re.fullmatch(r"[0-9a-f]{64}",sha) or not re.fullmatch(r"[0-9a-f]{64}",query) or not re.fullmatch(r"[A-Za-z0-9._-]{1,128}",approval) or type(page) is not int or not 1<=page<=MAX_CATALOG_PAGE or type(size) is not int or not 1<=size<=20:
             raise ValueError("Inconsistent page provenance")
         result.append({"page_sha256":sha,"approval_ref":approval,"query_sha256":query,"page":page,"page_size":size})
     return result

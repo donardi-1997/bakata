@@ -6,8 +6,8 @@ $fullBuild = isset($argv[1]);
 require $fullBuild ? $argv[1] . '/clasess/views/Products.php' : __DIR__ . '/../tools/dropify-quarantine/catalog-bridge.php';
 function ck($ok) { if (!$ok) throw new RuntimeException('Catalog assertion failed'); }
 function reject($fn) { try { $fn(); } catch (InvalidArgumentException $e) { return; } throw new RuntimeException('Expected rejection'); }
-ck(bakata_catalog_offset(1,10)===0 && bakata_catalog_offset(2,10)===10 && bakata_catalog_offset(3,10)===20);
-reject(fn()=>bakata_catalog_offset(101,10));
+ck(bakata_catalog_offset(1,10)===0 && bakata_catalog_offset(2,10)===10 && bakata_catalog_offset(3,10)===20 && bakata_catalog_offset(1001,10)===10000);
+reject(fn()=>bakata_catalog_offset(2001,10));
 reject(fn()=>bakata_catalog_offset(1,21));
 $item=(object)['id'=>96,'sku'=>'025216','name'=>'Prueba','type'=>'SIMPLE','sale_price'=>'7000.25',
     'suggested_price'=>17000,'stock'=>412,'store'=>(object)['id'=>7,'token'=>'secret-canary'],

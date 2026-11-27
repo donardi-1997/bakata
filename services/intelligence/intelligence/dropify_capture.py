@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 import time
 
-from .dropify_bridge import BridgeArchive, decode
+from .dropify_bridge import BridgeArchive, decode, MAX_CATALOG_PAGE
 from .dropify_catalog import MAX_BYTES, unique
 from .storage import encode, ref
 
@@ -59,7 +59,7 @@ def approval(run,page):
 def policy(run,store,first,last,until,operator,source_ref):
     if not isinstance(run,str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}",run) or not isinstance(store,str) or not re.fullmatch(r"[1-9][0-9]{0,9}",store):
         raise ValueError("Explicit run and store required")
-    if type(first) is not int or type(last) is not int or not 1<=first<=last<=100 or last-first>=MAX_PAGES_PER_RUN or type(until) is not int:
+    if type(first) is not int or type(last) is not int or not 1<=first<=last<=MAX_CATALOG_PAGE or last-first>=MAX_PAGES_PER_RUN or type(until) is not int:
         raise ValueError("Invalid authorized page range")
     return {"schema":"bakata-dropify-capture-run-v1","run":run,"store":store,"first":first,
         "last":last,"until":until,"operator":ref(operator),"source_ref":ref(source_ref)}
@@ -141,7 +141,7 @@ def capture(workspace,archive,plan,fetch,*,clock=time.time,pause=time.sleep):
         return {"schema":"bakata-dropify-capture-result-v1","run":plan["run"],
                 "pages_archived":completed,"unique_ids_in_window":len(seen),
                 "new_observations":inserted,"connector_calls_this_execution":requests,
-                "stop_reason":reason,"next_page":following if reason!="partial-or-empty-page" and following<=100 else None,
+                "stop_reason":reason,"next_page":following if reason!="partial-or-empty-page" and following<=MAX_CATALOG_PAGE else None,
                 "coverage_verified":False,"provider_total_verified":False,"woo_mutation":False}
 
 

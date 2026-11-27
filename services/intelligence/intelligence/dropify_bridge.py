@@ -13,6 +13,8 @@ from .dropify_catalog import unique, MAX_BYTES, MAX_PAGES, MAX_ROWS
 from .storage import CommercialStore, instant, ref
 
 APP_ID = 0x424B4432
+MAX_CATALOG_PAGE = 2000
+MAX_BRIDGE_PAGES = 20000
 FIELDS = {"external_id","sku","title","type","base_price","suggested_price","simple_stock","categories","warehouse"}
 
 
@@ -48,7 +50,7 @@ def decode(raw, now):
         raise ValueError("Invalid query digest")
     store=data["store_id"]
     page,size=data["page"],data["page_size"]
-    if not isinstance(store,str) or not re.fullmatch(r"[1-9][0-9]{0,9}",store) or type(page) is not int or not 1<=page<=100 or type(size) is not int or not 1<=size<=20 or type(data["offset"]) is not int or data["offset"]!=(page-1)*size:
+    if not isinstance(store,str) or not re.fullmatch(r"[1-9][0-9]{0,9}",store) or type(page) is not int or not 1<=page<=MAX_CATALOG_PAGE or type(size) is not int or not 1<=size<=20 or type(data["offset"]) is not int or data["offset"]!=(page-1)*size:
         raise ValueError("Invalid page metadata")
     rows=data["rows"]
     if not isinstance(rows,list) or len(rows)>size or type(data["possible_next"]) is not bool or data["possible_next"]!=(len(rows)==size):
@@ -125,7 +127,7 @@ class BridgeArchive:
             self.db.execute("BEGIN IMMEDIATE")
             if self.db.execute("SELECT 1 FROM pages WHERE sha=?",(sha,)).fetchone():
                 return {"sha256":sha,"inserted":0}
-            if self.db.execute("SELECT COUNT(*) FROM pages").fetchone()[0]>=MAX_PAGES:
+            if self.db.execute("SELECT COUNT(*) FROM pages").fetchone()[0]>=MAX_BRIDGE_PAGES:
                 raise ValueError("Page capacity reached")
             self.db.execute("INSERT INTO pages VALUES (?,?,?,?,?,?,?,?,?)",(sha,store,at,data["page"],data["page_size"],operator,len(data["rows"]),data["approval_ref"],data["query_sha256"]))
             remaining=MAX_ROWS-self.db.execute("SELECT COUNT(*) FROM observations").fetchone()[0]

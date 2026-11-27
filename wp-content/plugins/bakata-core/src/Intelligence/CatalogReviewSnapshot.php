@@ -47,7 +47,7 @@ final class CatalogReviewSnapshot
             && self::pattern($s['captured_at'],'/\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\z/D'));
         $at=\DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:s\Z',$s['captured_at'],new \DateTimeZone('UTC'));
         self::check($at!==false && $at->format('Y-m-d\TH:i:s\Z')===$s['captured_at'] && $at->getTimestamp()<=$now+300);
-        self::check(is_int($s['page']) && $s['page']>=1 && $s['page']<=100
+        self::check(is_int($s['page']) && $s['page']>=1 && $s['page']<=2000
             && is_int($s['page_size']) && $s['page_size']>=1 && $s['page_size']<=20
             && $s['offset']===($s['page']-1)*$s['page_size']
             && is_array($s['rows']) && array_is_list($s['rows']) && count($s['rows'])<=$s['page_size']
