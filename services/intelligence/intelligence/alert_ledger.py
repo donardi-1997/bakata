@@ -97,6 +97,23 @@ class AlertLedger:
             if db.execute(f"PRAGMA max_page_count={cap}").fetchone()[0]>cap:
                 raise ValueError("Alert storage budget exceeded")
 
+    @classmethod
+    def reader(cls,db,archive_ref,threshold):
+        """Open an existing ledger without initializing or migrating it."""
+        archive_ref=ref(archive_ref)
+        if db.in_transaction or type(threshold) is not int or not 1<=threshold<=10000:
+            raise ValueError("Independent reader and explicit threshold required")
+        db.execute("PRAGMA query_only=ON")
+        if (db.execute("PRAGMA application_id").fetchone()[0],db.execute("PRAGMA user_version").fetchone()[0])!=(APP_ID,1):
+            raise ValueError("Unknown alert schema")
+        if db.execute("SELECT archive_ref,threshold FROM scope").fetchall()!=[(archive_ref,threshold)]:
+            raise ValueError("Alert scope or threshold differs")
+        instance=cls.__new__(cls)
+        instance.db=db
+        instance.archive_ref=archive_ref
+        instance.threshold=threshold
+        return instance
+
     def collect(self,bridge,*,store,now,after="",limit=100):
         """Generate signals directly from the archive, never trust uploaded reports."""
         if bridge is self.db or self.db.in_transaction:

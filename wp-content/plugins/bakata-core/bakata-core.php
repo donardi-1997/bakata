@@ -40,9 +40,13 @@ require_once __DIR__ . '/src/Intelligence/CatalogReviewPanel.php';
 require_once __DIR__ . '/src/Intelligence/ProfitabilitySnapshot.php';
 require_once __DIR__ . '/src/Intelligence/ProfitabilityPanel.php';
 
+require_once __DIR__ . '/src/Intelligence/AlertDashboardSnapshot.php';
+require_once __DIR__ . '/src/Intelligence/AlertDashboardPanel.php';
+
 Intelligence\AdminPanel::register();
 Intelligence\CatalogReviewPanel::register();
 Intelligence\ProfitabilityPanel::register();
+Intelligence\AlertDashboardPanel::register();
 
 // Export only visible catalog rows from the existing authenticated Dropify screen.
 // No connector methods, token lookup, HTTP requests or catalog changes.
