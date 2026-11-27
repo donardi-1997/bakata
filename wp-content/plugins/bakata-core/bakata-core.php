@@ -32,6 +32,7 @@ require_once __DIR__ . '/src/Intelligence/PreviewSnapshot.php';
 require_once __DIR__ . '/src/Intelligence/AdminPanel.php';
 require_once __DIR__ . '/src/Intelligence/DraftBridge.php';
 require_once __DIR__ . '/src/Intelligence/DropifyPreview.php';
+require_once __DIR__ . '/src/Intelligence/DropifyDiagnostics.php';
 
 Intelligence\AdminPanel::register();
 
