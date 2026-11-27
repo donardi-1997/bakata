@@ -4,7 +4,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/*dropify*'
-      - 'tools/dropify-quarantine/**'\n      - 'infra/research-worker/**'
+      - 'tools/dropify-quarantine/**'
+      - 'infra/research-worker/**'
       - '.github/workflows/dropify-catalog-validation.yml'
   workflow_dispatch:
 permissions:
