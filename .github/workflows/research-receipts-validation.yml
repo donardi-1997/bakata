@@ -1,0 +1,34 @@
+name: Research durable receipts validation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/intelligence/intelligence/research_receipts.py'
+      - 'services/intelligence/intelligence/dropify_bridge.py'
+      - 'services/intelligence/intelligence/dropify_capture.py'
+      - 'scripts/test-research-receipts-aws.py'
+      - '.github/workflows/research-receipts-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install test-only AWS service emulators
+        run: |
+          python3 -m venv /tmp/bk-receipt-tests
+          /tmp/bk-receipt-tests/bin/pip install 'moto[dynamodb,s3]>=5.1,<6' 'boto3>=1.36,<2'
+      - name: Exercise conditional receipts and versioned evidence without network calls
+        env:
+          AWS_ACCESS_KEY_ID: fixture
+          AWS_SECRET_ACCESS_KEY: fixture
+          AWS_SESSION_TOKEN: fixture
+          AWS_EC2_METADATA_DISABLED: 'true'
+          AWS_DEFAULT_REGION: us-east-1
+          PYTHONPATH: services/intelligence
+        run: /tmp/bk-receipt-tests/bin/python scripts/test-research-receipts-aws.py -v

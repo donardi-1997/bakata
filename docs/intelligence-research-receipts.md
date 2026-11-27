@@ -1,0 +1,13 @@
+# INT-18H.1 — Reservas duraderas y evidencia versionada (solo fixtures)
+
+El módulo intelligence.research_receipts implementa el protocolo AWS con clientes de bajo nivel inyectados. No contiene proveedor, token, entrypoint, cron ni permiso IAM operativo. Rechaza planes sin prefijo fixture-. Usa la tabla pk/sk y el bucket versionado previstos por INT-18G, con prefijos FIXTURE#STORE# y fixture-research/v1/. No existe llamada automática a AWS desde Intelligence actual.
+
+- Registrar plan explícito inmutable, una ventana de hasta diez páginas y 30 minutos.
+- Reservar con TransactWriteItems: validar estado exacto de corrida, escribir lock exclusivo por tienda y recibo de página no existente. Solo el resultado exitoso permite al futuro caller realizar la consulta. Un error o timeout de reserva jamás habilita una llamada.
+- El lock no expira ni se elimina automáticamente. Reservado significa potencialmente incierto. No habilitar otra ventana o corrida de la tienda mientras exista.
+- Proyectar y validar el JSON con el contrato bridge existente. Validar tienda, página, tamaño, aprobación, consulta, intervalo temporal e IDs crecientes dentro de la ventana.
+- S3 PutObject condicional IfNoneMatch *, SHA-256, SSE-S3 y metadata de intento. Leer exactamente la versión recién escrita, comprobar tamaño, bytes, SHA y metadata. Completar mediante transacción CAS de lock, corrida y recibo. Liberar tienda con cooldown de diez segundos. No sobrescribir evidencias.
+- Recuperación explícita: si existe objeto versionado con metadata correcta y JSON válido, recuperarlo sin volver a consultar al proveedor. Si no existe, dejar lock indefinido y revisar manualmente. No hay API de desbloqueo, retry de proveedor ni borrado de recibos.
+- Si commit de cierre fue ambiguo, consultar status; no repetir la consulta. Status hace lecturas consistentes individuales (no una fotografía atómica).
+
+Pruebas con emulación de servicios AWS (Moto): la semántica de producción, IAM y políticas de red requieren validación separada. No se crea ni modifica infraestructura real. El reloj es provisto por caller confiable; no exponer como endpoint ni aceptar inputs de usuarios públicos. Esta etapa no es una garantía de entrega exactamente una vez: el proveedor puede haber recibido una llamada cuyo resultado se perdió. La exclusión protege callers cooperativos; falta conectar el worker y aplicar permisos estrictos de escritura condicional y no borrado, retención de versiones, validación de identidad/propiedad de recursos, reloj confiable y coordinación de autorizaciones entre tareas. La verificación de censo entre ventanas sigue en dropify_census. No hay transporte de credenciales reales.
