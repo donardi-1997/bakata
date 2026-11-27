@@ -51,6 +51,7 @@ final class CatalogReviewPanel
             set_transient(self::key(),$raw,15*MINUTE_IN_SECONDS);
             if (get_transient(self::key())!==$raw) { throw new \RuntimeException('Cache unavailable.'); }
         } catch (\Throwable $e) { self::redirect('invalid'); }
+        ProfitabilityPanel::forget();
         self::redirect('loaded');
     }
 
@@ -58,6 +59,7 @@ final class CatalogReviewPanel
     {
         self::post('bakata_catalog_review_clear');
         delete_transient(self::key());
+        ProfitabilityPanel::forget();
         self::redirect('cleared');
     }
 
@@ -66,7 +68,7 @@ final class CatalogReviewPanel
         return isset($_GET[$key]) && is_string($_GET[$key])?sanitize_text_field(wp_unslash($_GET[$key])):'';
     }
 
-    public static function render(): void
+    public static function current(): ?array
     {
         self::guard();
         $data=null;
@@ -74,6 +76,13 @@ final class CatalogReviewPanel
         if (is_string($raw)) {
             try { $data=CatalogReviewSnapshot::decode($raw,time()); } catch (\Throwable $e) { $data=null; }
         }
+        return $data;
+    }
+
+    public static function render(): void
+    {
+        self::guard();
+        $data=self::current();
         $labels=['positive'=>'Stock reportado positivo','zero'=>'Cero reportado','unknown'=>'Desconocido'];
         $notices=['loaded'=>'Vista de catálogo cargada.','invalid'=>'Archivo inválido o caché no disponible.','cleared'=>'Vista de catálogo eliminada.'];
         echo '<div class="wrap"><h1>Revisión de catálogo</h1><p>Exploración offline de una página archivada. Sin consulta al proveedor, aprobación, importación ni publicación.</p>';
@@ -87,6 +96,8 @@ final class CatalogReviewPanel
         echo '</form><p>Vista individual durante 15 minutos. El archivo no se publica ni se incorpora a la biblioteca multimedia.</p>';
         if ($data===null) { echo '<h2>Sin catálogo cargado</h2><p>Usa la exportación offline del archivo BridgeArchive.</p></div>'; return; }
         $s=$data['snapshot'];
+        $dossier=ProfitabilityPanel::current($data);
+        ProfitabilityPanel::form($dossier);
         $at=strtotime($s['captured_at']);
         $age=time()-$at;
         $fresh=$age>=0 && $age<=86400;
@@ -117,7 +128,10 @@ final class CatalogReviewPanel
             foreach (['base_price','suggested_price','simple_stock'] as $field) { echo '<td>'.esc_html($row[$field]===null?'Desconocido':(string)$row[$field]).'</td>'; }
             echo '<td>'.esc_html(implode(', ',$row['categories'])).'<br>'.esc_html($row['warehouse']).'</td><td>';
             echo esc_html($row['type']!=='simple'?'Tipo por resolver':'Costo final y disponibilidad por verificar');
-            echo '<br>Sin evaluación vinculada</td></tr>';
+            echo '<br>';
+            if ($dossier!==null && ProfitabilitySnapshot::matches($dossier,$data,$row)) { ProfitabilityPanel::details($dossier); }
+            else { echo 'Sin evaluación vinculada'; }
+            echo '</td></tr>';
         }
         if (!$rows) { echo '<tr><td colspan="6">No hay candidatos para estos filtros.</td></tr>'; }
         echo '</tbody></table></div><p>La moneda, costo de adquisición, margen, demanda y existencias vendibles no están certificados. No se calcula rentabilidad con estos precios.</p></div>';
