@@ -1,6 +1,7 @@
 name: Dropify catalog validation
 on:
   pull_request:
+    branches: [main]
     paths:
       - 'scripts/*dropify*'
       - 'tools/dropify-quarantine/**'
@@ -10,6 +11,10 @@ permissions:
   contents: read
 jobs:
   catalog-package:
+    # Independent from Foundation checks; manual packaging runs are not canceled.
+    concurrency:
+      group: dropify-catalog-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -24,6 +29,7 @@ jobs:
           echo 'bf23c6b1c5dd640aab3d38e3f370a41fbd60139ac60a1ce5f0347a059e9b6700  /tmp/dropify-validation/original.zip' | sha256sum -c -
       - name: Validate all prior hardening and catalog-only build offline
         run: |
+          python3 scripts/test-dropify-dev-preflight.py
           python3 scripts/verify-dropify.py /tmp/dropify-validation/original.zip
           python3 scripts/verify-dropify.py /tmp/dropify-validation/original.zip --catalog-only
           python3 scripts/harden-dropify.py /tmp/dropify-validation/original.zip /tmp/dropify-validation/dropify-catalog-validation.zip --catalog-only

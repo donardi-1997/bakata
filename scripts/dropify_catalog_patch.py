@@ -83,11 +83,25 @@ def patch_catalog(name, source):
             return null;
         }
         $all_products = array();""")
-        method = one(method, "'timeout' => '100000',", "'timeout' => 15,\n            'limit_response_size' => 524288,")
+        method = one(method, "'timeout' => '100000',", "'timeout' => 15,\n            'limit_response_size' => 524288,\n            'reject_unsafe_urls' => true,")
+        method = one(method, '        $endpoint = $this->constants->API_URL . "products/index";', """        $endpoint = $this->constants->API_URL . "products/index";
+        // First operational validation is scoped to Colombia.
+        if ($endpoint !== 'https://api.dropi.co/integrations/products/index') { return null; }""")
         method = one(method, "        $response = wp_remote_post(", """        $receipt = 'bk_dropify_catalog_' . hash('sha256', BAKATA_DROPIFY_CATALOG_APPROVAL_REF);
-        if (!add_option($receipt, array('store'=>$store_filter,'offset'=>$current_page,'at'=>gmdate(DATE_ATOM)), '', false)) {
-            return null;
+        // INSERT into the unique option_name index, not add_option's upsert.
+        global $wpdb;
+        $previous = $wpdb->suppress_errors(true);
+        try {
+            $reserved = $wpdb->insert($wpdb->options, array(
+                'option_name'=>$receipt,
+                'option_value'=>wp_json_encode(array('store'=>$store_filter,'offset'=>$current_page,
+                    'at'=>gmdate(DATE_ATOM))),
+                'autoload'=>'no'
+            ), array('%s','%s','%s'));
+        } finally {
+            $wpdb->suppress_errors($previous);
         }
+        if ($reserved !== 1) { return null; }
         $response = wp_remote_post(""")
         # Reuse the original connector request; do not expose errors, bodies or token.
         cut = method.index("        if (is_wp_error($response))", method.index("$response = wp_remote_post("))
