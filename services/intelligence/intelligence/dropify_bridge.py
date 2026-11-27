@@ -37,13 +37,16 @@ def decode(raw, now):
     if not isinstance(raw,bytes) or not 0<len(raw)<=MAX_BYTES:
         raise ValueError("Invalid snapshot size")
     data=json.loads(raw,object_pairs_hook=unique)
-    if not isinstance(data,dict) or set(data)!={"schema","captured_at","store_id","page","page_size","offset","possible_next","rows"} or data["schema"]!="bakata-dropify-bridge-v1":
+    if not isinstance(data,dict) or set(data)!={"schema","captured_at","store_id","page","page_size","offset","possible_next","rows","approval_ref","query_sha256"} or data["schema"]!="bakata-dropify-bridge-v1":
         raise ValueError("Unknown bridge schema")
     if not isinstance(data["captured_at"],str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z",data["captured_at"]):
         raise ValueError("Invalid UTC capture time")
     at=instant(datetime.fromisoformat(data["captured_at"].replace("Z","+00:00")))
     if at>instant(now)+timedelta(minutes=5):
         raise ValueError("Future capture")
+    ref(data["approval_ref"])
+    if not isinstance(data["query_sha256"],str) or not re.fullmatch(r"[0-9a-f]{64}",data["query_sha256"]):
+        raise ValueError("Invalid query digest")
     store=data["store_id"]
     page,size=data["page"],data["page_size"]
     if not isinstance(store,str) or not re.fullmatch(r"[1-9][0-9]{0,9}",store) or type(page) is not int or not 1<=page<=100 or type(size) is not int or not 1<=size<=20 or type(data["offset"]) is not int or data["offset"]!=(page-1)*size:
@@ -90,7 +93,8 @@ class BridgeArchive:
                 if db.execute("SELECT 1 FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' LIMIT 1").fetchone():
                     raise ValueError("Unrecognized database")
                 db.execute("""CREATE TABLE pages (sha TEXT PRIMARY KEY,store TEXT NOT NULL,at TEXT NOT NULL,
-                    page INTEGER NOT NULL,size INTEGER NOT NULL,operator TEXT NOT NULL,rows INTEGER NOT NULL)""")
+                    page INTEGER NOT NULL,size INTEGER NOT NULL,operator TEXT NOT NULL,rows INTEGER NOT NULL,
+                    approval_ref TEXT NOT NULL,query_sha256 TEXT NOT NULL)""")
                 db.execute("""CREATE TABLE observations (store TEXT NOT NULL,id TEXT NOT NULL,at TEXT NOT NULL,
                     payload TEXT NOT NULL,PRIMARY KEY(store,id,at))""")
                 db.execute("""CREATE TABLE page_rows (sha TEXT NOT NULL REFERENCES pages(sha),store TEXT NOT NULL,
@@ -122,7 +126,7 @@ class BridgeArchive:
                 return {"sha256":sha,"inserted":0}
             if self.db.execute("SELECT COUNT(*) FROM pages").fetchone()[0]>=MAX_PAGES:
                 raise ValueError("Page capacity reached")
-            self.db.execute("INSERT INTO pages VALUES (?,?,?,?,?,?,?)",(sha,store,at,data["page"],data["page_size"],operator,len(data["rows"])))
+            self.db.execute("INSERT INTO pages VALUES (?,?,?,?,?,?,?,?,?)",(sha,store,at,data["page"],data["page_size"],operator,len(data["rows"]),data["approval_ref"],data["query_sha256"]))
             remaining=MAX_ROWS-self.db.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
             inserted=0
             for row in data["rows"]:
