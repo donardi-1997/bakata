@@ -23,8 +23,8 @@ class FoundationTests(unittest.TestCase):
                    "AWS::EC2::VPCPeeringConnection","AWS::SecretsManager::Secret"}
         self.assertFalse(forbidden & {r["Type"] for r in self.r.values()})
         for name,r in self.r.items():
-            if r["Type"].startswith("AWS::EC2::") or name in ("FixtureTask","ExecutionRole","WorkerLogs"):
-                self.assertEqual(r["Condition"],"FixtureNetworkEnabled")
+            if r["Type"].startswith("AWS::EC2::") or name in ("FixtureTask","ExecutionRole","WorkerLogs","PersistentFixtureTask","FixtureTaskRole"):
+                self.assertIn(r["Condition"],("FixtureNetworkEnabled","PersistentFixtureEnabled"))
         self.assertFalse(self.props("ResearchSubnet")["MapPublicIpOnLaunch"])
         self.assertFalse(self.props("WorkerSecurityGroup").get("SecurityGroupIngress"))
         self.assertIn("ImagesRequired",self.t["Rules"])
@@ -39,7 +39,7 @@ class FoundationTests(unittest.TestCase):
         for name in ("EvidenceBucket","CaptureLedger","WorkerRepository","DatabaseRepository"):
             self.assertEqual(self.r[name]["DeletionPolicy"],"Retain")
             self.assertEqual(self.r[name]["UpdateReplacePolicy"],"Retain")
-        for name in ("WorkerRepository","DatabaseRepository"):
+        for name in ("WorkerRepository","DatabaseRepository","CoordinatorRepository"):
             self.assertEqual(self.props(name)["ImageTagMutability"],"IMMUTABLE")
             self.assertTrue(self.props(name)["ImageScanningConfiguration"]["ScanOnPush"])
 
@@ -66,6 +66,23 @@ class FoundationTests(unittest.TestCase):
                     self.assertTrue(all(x.startswith(("logs:","ecr:")) and "*" not in x for x in actions))
                     if statement["Resource"]=="*":
                         self.assertEqual(actions,["ecr:GetAuthorizationToken"])
+
+    def test_persistent_fixture_is_explicit_and_scoped(self):
+        self.assertEqual(self.t["Parameters"]["EnableFixturePersistence"]["Default"],"false")
+        self.assertEqual(self.r["PersistentFixtureTask"]["Condition"],"PersistentFixtureEnabled")
+        task=self.props("PersistentFixtureTask")
+        self.assertEqual(task["TaskRoleArn"],{"Fn::GetAtt":["FixtureTaskRole","Arn"]})
+        self.assertEqual(self.r["DynamoEndpoint"]["Condition"],"PersistentFixtureEnabled")
+        for c in task["ContainerDefinitions"]:
+            self.assertNotIn("Secrets",c)
+            self.assertFalse(c.get("PortMappings"))
+            self.assertIn("@",c["Image"]["Fn::Sub"])
+        statements=self.props("FixtureTaskRole")["Policies"][0]["PolicyDocument"]["Statement"]
+        self.assertEqual(set(statements[0]["Action"]),{"dynamodb:GetItem","dynamodb:PutItem","dynamodb:ConditionCheckItem"})
+        self.assertEqual(statements[0]["Condition"]["ForAllValues:StringEquals"]["dynamodb:LeadingKeys"],["FIXTURE#STORE#7"])
+        self.assertEqual(statements[1]["Resource"]["Fn::Sub"],"${EvidenceBucket.Arn}/fixture-research/v1/7/*")
+        self.assertEqual(statements[2]["Condition"]["StringEquals"]["s3:if-none-match"],"*")
+        self.assertEqual(statements[2]["Action"],"s3:PutObject")
 
     def test_endpoint_scope(self):
         self.assertEqual(self.props("S3Endpoint")["VpcEndpointType"],"Gateway")
