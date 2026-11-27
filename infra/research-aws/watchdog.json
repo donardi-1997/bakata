@@ -1,0 +1,320 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Bakata isolated fixture watchdog candidate; disabled until reviewed",
+  "Parameters": {
+    "ResearchName": {
+      "Type": "String",
+      "AllowedPattern": "bakata-research-[A-Za-z0-9_-]{1,38}"
+    },
+    "ClusterName": {
+      "Type": "String",
+      "AllowedPattern": "bakata-research-[A-Za-z0-9_-]{1,80}"
+    },
+    "TaskDefinition": {
+      "Type": "String",
+      "AllowedPattern": "arn:aws:ecs:us-east-1:[0-9]{12}:task-definition/bakata-research-[A-Za-z0-9_-]{1,80}-persistent-fixture:[1-9][0-9]*"
+    },
+    "CodeBucket": {
+      "Type": "String",
+      "MinLength": 3
+    },
+    "CodeKey": {
+      "Type": "String",
+      "MinLength": 1
+    },
+    "CodeVersion": {
+      "Type": "String",
+      "MinLength": 1,
+      "AllowedPattern": "(?!null$).+"
+    },
+    "EnableWatchdog": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ]
+    }
+  },
+  "Conditions": {
+    "WatchdogEnabled": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableWatchdog"
+        },
+        "true"
+      ]
+    }
+  },
+  "Resources": {
+    "LaunchTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${ResearchName}-launches"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "pk",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "sk",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "pk",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "sk",
+            "KeyType": "RANGE"
+          }
+        ],
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        }
+      }
+    },
+    "WatchdogLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/${ResearchName}-watchdog"
+        },
+        "RetentionInDays": 14
+      }
+    },
+    "WatchdogRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "fixture-expiry-only",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "LaunchLedgerOnly",
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "LaunchTable",
+                      "Arn"
+                    ]
+                  },
+                  "Condition": {
+                    "ForAllValues:StringEquals": {
+                      "dynamodb:LeadingKeys": [
+                        "FIXTURE#LAUNCH"
+                      ]
+                    },
+                    "Null": {
+                      "dynamodb:LeadingKeys": "false"
+                    }
+                  }
+                },
+                {
+                  "Sid": "DiscoverInReviewedCluster",
+                  "Effect": "Allow",
+                  "Action": "ecs:ListTasks",
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "ecs:cluster": {
+                        "Fn::Sub": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ClusterName}"
+                      }
+                    }
+                  }
+                },
+                {
+                  "Sid": "DescribeFixtureTask",
+                  "Effect": "Allow",
+                  "Action": "ecs:DescribeTasks",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task/${ClusterName}/*"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "ecs:cluster": {
+                        "Fn::Sub": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ClusterName}"
+                      }
+                    }
+                  }
+                },
+                {
+                  "Sid": "StopTaggedFixtureOnly",
+                  "Effect": "Allow",
+                  "Action": "ecs:StopTask",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task/${ClusterName}/*"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "ecs:cluster": {
+                        "Fn::Sub": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ClusterName}"
+                      },
+                      "aws:ResourceTag/bakata:purpose": "research-fixture"
+                    },
+                    "StringLike": {
+                      "aws:ResourceTag/bakata:run": "fixture-*"
+                    },
+                    "Null": {
+                      "aws:ResourceTag/bakata:until": "false"
+                    }
+                  }
+                },
+                {
+                  "Sid": "WriteOwnLogs",
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResearchName}-watchdog:log-stream:*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Watchdog": {
+      "Type": "AWS::Lambda::Function",
+      "DependsOn": [
+        "WatchdogLogs"
+      ],
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${ResearchName}-watchdog"
+        },
+        "Runtime": "python3.12",
+        "Handler": "intelligence.research_supervisor.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "WatchdogRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "CodeBucket"
+          },
+          "S3Key": {
+            "Ref": "CodeKey"
+          },
+          "S3ObjectVersion": {
+            "Ref": "CodeVersion"
+          }
+        },
+        "Timeout": 60,
+        "MemorySize": 128,
+        "ReservedConcurrentExecutions": 1,
+        "Environment": {
+          "Variables": {
+            "BAKATA_WATCHDOG_ENABLED": {
+              "Ref": "EnableWatchdog"
+            },
+            "BAKATA_LAUNCH_TABLE": {
+              "Ref": "LaunchTable"
+            },
+            "BAKATA_CLUSTER": {
+              "Fn::Sub": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ClusterName}"
+            },
+            "BAKATA_TASK_DEFINITION": {
+              "Ref": "TaskDefinition"
+            }
+          }
+        }
+      }
+    },
+    "WatchdogSchedule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "ScheduleExpression": "rate(1 minute)",
+        "State": {
+          "Fn::If": [
+            "WatchdogEnabled",
+            "ENABLED",
+            "DISABLED"
+          ]
+        },
+        "Targets": [
+          {
+            "Id": "FixtureWatchdog",
+            "Arn": {
+              "Fn::GetAtt": [
+                "Watchdog",
+                "Arn"
+              ]
+            },
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 0,
+              "MaximumEventAgeInSeconds": 60
+            }
+          }
+        ]
+      }
+    },
+    "SchedulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "Watchdog"
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "WatchdogSchedule",
+            "Arn"
+          ]
+        },
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "LaunchTableName": {
+      "Value": {
+        "Ref": "LaunchTable"
+      }
+    },
+    "WatchdogArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Watchdog",
+          "Arn"
+        ]
+      }
+    }
+  }
+}
