@@ -69,9 +69,19 @@ function bakata_catalog_project($items, $storeId, $page, $size)
         'possible_next'=>count($rows)===$size, 'rows'=>$rows);
 }
 
+function bakata_catalog_read_enabled()
+{
+    return defined('BAKATA_DROPIFY_CATALOG_READ') && BAKATA_DROPIFY_CATALOG_READ === true
+        && in_array(wp_get_environment_type(), array('development','staging'), true);
+}
+
 function bakata_catalog_render($list)
 {
     if (!current_user_can('manage_options')) { wp_die('Forbidden', '', array('response'=>403)); }
+    if (!bakata_catalog_read_enabled()) {
+        echo '<div class="wrap"><h1>Dropify — Catálogo de investigación</h1><p>Consulta deshabilitada. Requiere autorización y configuración explícita del entorno de pruebas.</p></div>';
+        return;
+    }
     $store = '';
     $page = 1;
     $query = '';
