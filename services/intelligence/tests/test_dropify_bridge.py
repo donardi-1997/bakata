@@ -1,4 +1,5 @@
 import json
+import hashlib
 import sqlite3
 import unittest
 from datetime import datetime, timezone, timedelta
@@ -23,6 +24,7 @@ class BridgeTests(unittest.TestCase):
     def raw(self,rows=None,**changes):
         return json.dumps(dict({"schema":"bakata-dropify-bridge-v1","captured_at":"2026-11-26T19:00:00Z",
             "store_id":"7","page":2,"page_size":10,"offset":10,"possible_next":False,
+            "approval_ref":"fixture-approval","query_sha256":hashlib.sha256(b"").hexdigest(),
             "rows":rows if rows is not None else [self.row]},**changes)).encode()
 
     def ingest(self,raw):
