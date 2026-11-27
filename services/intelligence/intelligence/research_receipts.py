@@ -58,14 +58,14 @@ class ResearchReceipts:
         # Compare the exact previous immutable representation, not only a status.
         params={"TableName":self.table,"Item":dict(key,payload={"S":encode(new)})}
         if old is None:
-            params.update(ConditionExpression="attribute_not_exists(pk)")
+            params.update(ConditionExpression="attribute_not_exists(#pk)",ExpressionAttributeNames={"#pk":"pk"})
         else:
-            params.update(ConditionExpression="payload = :old",ExpressionAttributeValues={":old":{"S":encode(old)}})
+            params.update(ConditionExpression="#p = :old",ExpressionAttributeNames={"#p":"payload"},ExpressionAttributeValues={":old":{"S":encode(old)}})
         return {"Put":params}
 
     def _check(self,key,old):
         return {"ConditionCheck":{"TableName":self.table,"Key":key,
-            "ConditionExpression":"payload = :old","ExpressionAttributeValues":{":old":{"S":encode(old)}}}}
+            "ConditionExpression":"#p = :old","ExpressionAttributeNames":{"#p":"payload"},"ExpressionAttributeValues":{":old":{"S":encode(old)}}}}
 
     def _txn(self,*items):
         # No application retry. Ambiguous transaction result must be reconciled.
