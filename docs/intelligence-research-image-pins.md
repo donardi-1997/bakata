@@ -17,7 +17,7 @@ El coordinador instala `infra/research-aws/coordinator-requirements.lock` con `-
 
 - `scripts/test-research-image-pins.py`: toda instrucción `FROM` research usa `@sha256:`, todo `pip install` exige hashes y el lock está completo; incluye mutaciones negativas. Se ejecuta en `research-aws-validation.yml` junto al test y `cfn-lint` de `proxy-task.json`.
 - Builds locales: proxy (importa `research_proxy_auth` sin red), coordinador (`pip freeze` coincide con el lock) e inteligencia (248 pruebas dentro de la imagen, sin red).
-- El worker no se construyó localmente: su contexto (`plugins/`, `dropify-capture-page.php`) lo ensambla CI desde ZIP. Solo se verificó que sus dos bases se resuelven.
+- El worker no se construyó localmente: su contexto (`plugins/`, `dropify-capture-page.php`) lo ensambla CI desde ZIP públicos verificados por SHA-256. **CI sí lo construyó y ejecutó con las bases fijadas**: job `catalog-package` del commit `290ee20`, paso «Rehearse CLI-only Fargate-style research worker without external network» (`docker build --network none`), resultado `success`. Ese job se ejecuta en cada PR que toque `infra/research-worker/**`.
 
 ## Límites
 

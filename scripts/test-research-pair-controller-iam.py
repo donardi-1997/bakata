@@ -73,14 +73,15 @@ EXPECTED_PATTERNS = {
     "CodeKey": "^$|^[A-Za-z0-9/_.-]{1,512}\\.zip$",
     "CodeVersion": "^$|^[A-Za-z0-9._-]{1,1024}$",
     "PairNonce": "^$|^[0-9a-f]{32}$",
-    "ProxySubnet": "^$|^subnet-[0-9a-f]{17}$",
-    "ProxySecurityGroup": "^$|^sg-[0-9a-f]{17}$",
-    "WorkerSubnet": "^$|^subnet-[0-9a-f]{17}$",
-    "WorkerSecurityGroup": "^$|^sg-[0-9a-f]{17}$",
+    "FoundationStackName": "^$|^bakata-research-[A-Za-z0-9-]{1,80}$",
 }
 FLAG = {"Type": "String", "Default": "false", "AllowedValues": ["false", "true"]}
-EXPECTED_ASSERTIONS = ([{"Fn::Not": [{"Fn::Equals": [{"Ref": k}, ""]}]} for k in EXPECTED_PATTERNS]
-                       + [{"Fn::Not": [{"Fn::Equals": [{"Ref": "ProxySecurityGroup"}, {"Ref": "WorkerSecurityGroup"}]}]}])
+# Network is imported from foundation.json: below we check that each import is the export of its own
+# role, that each export points at its own reviewed resource, and the exact worker-to-proxy ingress.
+EXPECTED_ASSERTIONS = [{"Fn::Not": [{"Fn::Equals": [{"Ref": k}, ""]}]} for k in EXPECTED_PATTERNS]
+NETWORK_IMPORTS = {"BAKATA_PROXY_SUBNET": "ProxyFixtureSubnet", "BAKATA_PROXY_SECURITY_GROUP": "ProxyFixtureSecurityGroup",
+                   "BAKATA_WORKER_SUBNET": "ProxyFixtureWorkerSubnet",
+                   "BAKATA_WORKER_SECURITY_GROUP": "ProxyFixtureWorkerSecurityGroup"}
 EXPECTED_FUNCTION = {
     "FunctionName": {"Fn::Sub": "${AWS::StackName}-pair-controller"},
     "Runtime": "python3.12",
@@ -100,10 +101,10 @@ EXPECTED_FUNCTION = {
         "BAKATA_CLUSTER": {"Ref": "ClusterArn"},
         "BAKATA_PROXY_DEFINITION": {"Ref": "ProxyTaskDefinitionArn"},
         "BAKATA_WORKER_DEFINITION": {"Ref": "WorkerTaskDefinitionArn"},
-        "BAKATA_PROXY_SUBNET": {"Ref": "ProxySubnet"},
-        "BAKATA_PROXY_SECURITY_GROUP": {"Ref": "ProxySecurityGroup"},
-        "BAKATA_WORKER_SUBNET": {"Ref": "WorkerSubnet"},
-        "BAKATA_WORKER_SECURITY_GROUP": {"Ref": "WorkerSecurityGroup"},
+        "BAKATA_PROXY_SUBNET": {"Fn::ImportValue": {"Fn::Sub": "${FoundationStackName}-" + NETWORK_IMPORTS["BAKATA_PROXY_SUBNET"]}},
+        "BAKATA_PROXY_SECURITY_GROUP": {"Fn::ImportValue": {"Fn::Sub": "${FoundationStackName}-" + NETWORK_IMPORTS["BAKATA_PROXY_SECURITY_GROUP"]}},
+        "BAKATA_WORKER_SUBNET": {"Fn::ImportValue": {"Fn::Sub": "${FoundationStackName}-" + NETWORK_IMPORTS["BAKATA_WORKER_SUBNET"]}},
+        "BAKATA_WORKER_SECURITY_GROUP": {"Fn::ImportValue": {"Fn::Sub": "${FoundationStackName}-" + NETWORK_IMPORTS["BAKATA_WORKER_SECURITY_GROUP"]}},
     }},
 }
 # No schedule, event source, URL or invoke permission: only an operator can invoke.
@@ -223,6 +224,21 @@ def network_violations(foundation, proxy):
     return found
 
 
+def import_violations(template, foundation):
+    """Every network value the controller uses must be foundation's reviewed export for that role."""
+    found = []
+    env = template["Resources"]["ControllerFunction"]["Properties"]["Environment"]["Variables"]
+    outputs = foundation["Outputs"]
+    for var, export in NETWORK_IMPORTS.items():
+        if env.get(var) != {"Fn::ImportValue": {"Fn::Sub": "${FoundationStackName}-" + export}}:
+            found.append("network value not imported from foundation: " + var)
+        output = outputs.get(export, {})
+        if (output.get("Value") != {"Ref": export} or output.get("Condition") != "ProxyFixtureEnabled"
+                or output.get("Export") != {"Name": {"Fn::Sub": "${AWS::StackName}-" + export}}):
+            found.append("foundation does not export reviewed " + export)
+    return found
+
+
 def _stmt(t, sid):
     return next(s for s in t["Resources"]["ControllerRole"]["Properties"]["Policies"][0]["PolicyDocument"]["Statement"]
                 if s.get("Sid") == sid)
@@ -281,7 +297,11 @@ TEMPLATE_MUTATIONS = {
     "schedule added": lambda t: t["Resources"].update(S={"Type": "AWS::Events::Rule", "Condition": ON}),
     "public invoke permission": lambda t: t["Resources"].update(P2={"Type": "AWS::Lambda::Permission", "Condition": ON}),
     "function URL": lambda t: t["Resources"].update(U={"Type": "AWS::Lambda::Url", "Condition": ON}),
-    "same SG allowed": lambda t: t["Rules"]["ReviewedInputsWhenEnabled"]["Assertions"].pop(),
+    "foundation stack not required": lambda t: t["Rules"]["ReviewedInputsWhenEnabled"]["Assertions"].pop(),
+    "any stack may supply the network": lambda t: t["Parameters"]["FoundationStackName"].update(
+        AllowedPattern="^$|^[A-Za-z][A-Za-z0-9-]{0,127}$"),
+    "free network parameter reintroduced": lambda t: t["Parameters"].update(
+        WorkerSubnet={"Type": "String", "Default": ""}),
     "nonce pattern widened": lambda t: t["Parameters"]["PairNonce"].update(AllowedPattern=".*"),
     "async retries default": lambda t: t["Resources"].pop("ControllerInvokeConfig"),
     "async retries enabled": lambda t: t["Resources"]["ControllerInvokeConfig"]["Properties"].update(MaximumRetryAttempts=2),
@@ -297,6 +317,29 @@ class PairControllerIamTests(unittest.TestCase):
 
     def test_cross_template_separation(self):
         self.assertEqual(network_violations(FOUNDATION, PROXY), [])
+        self.assertEqual(import_violations(TEMPLATE, FOUNDATION), [])
+
+    def test_import_mutations_detected(self):
+        def env(t):
+            return t["Resources"]["ControllerFunction"]["Properties"]["Environment"]["Variables"]
+        swapped = copy.deepcopy(TEMPLATE)
+        env(swapped)["BAKATA_PROXY_SUBNET"], env(swapped)["BAKATA_WORKER_SUBNET"] = (
+            env(swapped)["BAKATA_WORKER_SUBNET"], env(swapped)["BAKATA_PROXY_SUBNET"])
+        literal = copy.deepcopy(TEMPLATE)
+        env(literal)["BAKATA_WORKER_SECURITY_GROUP"] = "sg-" + "f" * 17
+        other_stack = copy.deepcopy(TEMPLATE)
+        env(other_stack)["BAKATA_PROXY_SECURITY_GROUP"] = {"Fn::ImportValue": "shared-sg"}
+        for name, t in {"proxy/worker swapped": swapped, "literal SG": literal, "foreign export": other_stack}.items():
+            with self.subTest(name):
+                self.assertTrue(import_violations(t, FOUNDATION), name)
+                self.assertTrue(violations(t), name)  # the exact function comparison also catches it
+        unexported = copy.deepcopy(FOUNDATION)
+        unexported["Outputs"]["ProxyFixtureSecurityGroup"].pop("Export")
+        renamed = copy.deepcopy(FOUNDATION)
+        renamed["Outputs"]["ProxyFixtureWorkerSubnet"]["Value"] = {"Ref": "ResearchSubnet"}
+        for name, f in {"export removed": unexported, "export points elsewhere": renamed}.items():
+            with self.subTest(name):
+                self.assertTrue(import_violations(TEMPLATE, f), name)
 
     def test_template_mutations_detected(self):
         for name, fn in TEMPLATE_MUTATIONS.items():
