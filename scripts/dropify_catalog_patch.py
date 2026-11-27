@@ -10,6 +10,20 @@ def patch_catalog(name, source):
         source = one(source, """    $Dropi = JPIODFW_Dropi::GetInstance();
     $Dropi->InitPlugin();""", """    if (is_admin() && class_exists('WooCommerce')) {
         JPIODFW_Products::GetInstance()->init();
+        // Reject unauthorized catalog POSTs before the admin header renders.
+        add_action('admin_init', static function () {
+            if (($GLOBALS['pagenow'] ?? '') !== 'admin.php'
+                || ($_GET['page'] ?? '') !== 'dropi-products'
+                || ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST'
+                || !isset($_POST['bk_catalog_read'])) {
+                return;
+            }
+            if (!current_user_can('manage_options')
+                || !isset($_POST['_wpnonce']) || !is_string($_POST['_wpnonce'])
+                || !wp_verify_nonce(wp_unslash($_POST['_wpnonce']), 'bk_catalog_read')) {
+                wp_die('Catalog authorization rejected.', '', array('response'=>403));
+            }
+        }, 0);
     }""")
     if name == "clasess/views/Products.php":
         start = source.index("    public function getProducts($product_list)")

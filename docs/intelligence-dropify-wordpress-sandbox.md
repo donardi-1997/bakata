@@ -22,3 +22,7 @@ El PR #57 se fusionó. Se comprobó el servidor dev por SSM: los 53 archivos Dro
 ## Siguiente gate
 
 CI verde y revisión de resultados; prueba de rollback/restauración de archivos, revisión de egress y rotación coordinada de credenciales si corresponde. La sustitución del plugin operativo requiere decisión expresa, porque catalog-only deshabilita despacho/importación y no es una actualización normal de tienda. La primera consulta real requiere permiso de proveedor y operador para el alcance; no automatizar ni usar endpoints privados aparte del propio conector autorizado.
+
+## Corrección de regresión HTTP
+
+La primera ejecución real instaló y activó ambos plugins, pero falló la aserción HTTP de nonce inválido. Se añade una puerta de autorización en admin_init antes de renderizar el administrador, preservando las verificaciones existentes de vista y modelo. Las pruebas de nonce inválido, ausente y no escalar no siguen redirecciones de administración y verifican que no se consume la autorización ni se produce una solicitud simulada. La causa exacta del primer código HTTP no quedó registrada; la nueva prueba imprime solamente el código de estado si falla.

@@ -75,6 +75,9 @@ cli option update bk_fixture_expiry "$(($(date +%s)+600))"
 cli option update bk_fixture_enabled 1
 docker exec "$wp" php /fixtures/http.php subscriber
 test "$(cli option get bk_fixture_http_calls)" = 0
+docker exec "$wp" php /fixtures/http.php invalid-nonce
+test "$(cli option get bk_fixture_http_calls)" = 0
+cli eval '$name="bk_dropify_catalog_".hash("sha256","ci-wordpress-approval"); if(get_option($name)!==false) throw new RuntimeException("Invalid nonce consumed authorization");'
 docker exec "$wp" php /fixtures/http.php enabled > "$temp/snapshot.json"
 test "$(cli option get bk_fixture_http_calls)" = 1
 cli eval 'global $wpdb; foreach(["bk_fixture_unexpected_provider","bk_fixture_bad_request","bk_fixture_unsafe_hook"] as $key) if(get_option($key)!==false) throw new RuntimeException("Unexpected fixture behavior"); $name="bk_dropify_catalog_".hash("sha256","ci-wordpress-approval"); $rows=$wpdb->get_results($wpdb->prepare("SELECT autoload,option_value FROM $wpdb->options WHERE option_name=%s",$name)); if(count($rows)!==1||$rows[0]->autoload!=="no"||str_contains($rows[0]->option_value,"canary")) throw new RuntimeException("Invalid receipt"); if(wp_count_posts("product")->publish || wp_count_posts("product")->draft || wc_orders_count("processing")) throw new RuntimeException("Unexpected commercial mutation");'

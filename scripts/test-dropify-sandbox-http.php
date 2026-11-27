@@ -3,7 +3,7 @@ declare(strict_types=1);
 // Executed inside the isolated WordPress container, not against dev.
 if (getenv('BAKATA_DROPIFY_SANDBOX') !== '1') { throw new RuntimeException('Fixture required'); }
 $mode=$argv[1]??'';
-if (!in_array($mode,['disabled','enabled','subscriber'],true)) { throw new RuntimeException('Invalid mode'); }
+if (!in_array($mode,['disabled','enabled','subscriber','invalid-nonce'],true)) { throw new RuntimeException('Invalid mode'); }
 function ck(bool $ok, string $label): void {
     if (!$ok) { throw new RuntimeException('Sandbox assertion failed: '.$label); }
 }
@@ -15,6 +15,8 @@ try {
         CURLOPT_TIMEOUT=>30,CURLOPT_COOKIEFILE=>$jar,CURLOPT_COOKIEJAR=>$jar]);
     $request=static function (string $path, ?array $post=null) use ($http): array {
         curl_setopt($http,CURLOPT_URL,'http://localhost'.$path);
+        // Follow login redirects only; never mask an admin POST's status.
+        curl_setopt($http,CURLOPT_FOLLOWLOCATION,$path==='/wp-login.php');
         curl_setopt($http,CURLOPT_POST,$post!==null);
         if ($post!==null) { curl_setopt($http,CURLOPT_POSTFIELDS,http_build_query($post)); }
         else { curl_setopt($http,CURLOPT_HTTPGET,true); }
@@ -44,8 +46,24 @@ try {
         $nonce=(new DOMXPath($doc))->query('//form[.//input[@name="bk_catalog_read"]]//input[@name="_wpnonce"]')->item(0);
         ck($nonce instanceof DOMElement,'form nonce');
         $form=['bk_catalog_read'=>'1','bk_store'=>'7','bk_page'=>'1','bk_query'=>'fixture','_wpnonce'=>'invalid'];
-        [$code,$bad]=$request($path,$form);
-        ck($code===403 && !str_contains($bad,'bk-catalog-json'),'bad nonce denied');
+        if ($mode==='invalid-nonce') {
+            [$code,$bad]=$request($path,$form);
+            ck($code===403 && !str_contains($bad,'bk-catalog-json')
+                && str_contains($bad,'Catalog authorization rejected.'),
+                'bad nonce denied (HTTP '.(int)$code.')');
+            unset($form['_wpnonce']);
+            [$code,$missing]=$request($path,$form);
+            ck($code===403 && !str_contains($missing,'bk-catalog-json')
+                && str_contains($missing,'Catalog authorization rejected.'),
+                'missing nonce denied (HTTP '.(int)$code.')');
+            $form['_wpnonce']=['invalid'];
+            [$code,$array]=$request($path,$form);
+            ck($code===403 && !str_contains($array,'bk-catalog-json')
+                && str_contains($array,'Catalog authorization rejected.'),
+                'array nonce denied (HTTP '.(int)$code.')');
+            echo "Invalid, missing and non-scalar nonces rejected before rendering.\n";
+            return;
+        }
         $form['_wpnonce']=$nonce->getAttribute('value');
         [$code,$good]=$request($path,$form);
         ck($code===200,'authorized POST');
