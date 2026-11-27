@@ -31,10 +31,10 @@ try {
     }
     try {
         if ($page>BAKATA_DROPIFY_BATCH_FIRST) {
-            $prior='bk_dropify_catalog_'.hash('sha256',bakata_catalog_batch_approval($run,$page-1));
-            $receipt=get_option($prior,false);
+            $prior='bk_dropify_batch_success_'.hash('sha256',bakata_catalog_batch_approval($run,$page-1));
+            $receipt=$wpdb->get_var($wpdb->prepare("SELECT option_value FROM $wpdb->options WHERE option_name=%s",$prior));
             $previous=is_string($receipt)?json_decode($receipt,true):null;
-            if (!is_array($previous) || ($previous['store']??null)!==$store || ($previous['offset']??null)!==($page-2)*10
+            if (!is_array($previous) || ($previous['store']??null)!==$store || ($previous['offset']??null)!==($page-2)*10 || ($previous['rows']??null)!==10
                 || !is_string($previous['at']??null) || ($at=strtotime($previous['at']))===false || time()-$at<10) {
                 throw new RuntimeException('Previous reservation or cooldown missing.');
             }
@@ -47,6 +47,11 @@ try {
         $snapshot=bakata_catalog_project($response['objects'],$store,$page,10,$scope['BAKATA_DROPIFY_CATALOG_APPROVAL_REF'],'');
         $json=wp_json_encode($snapshot,JSON_UNESCAPED_UNICODE);
         if (!is_string($json) || strlen($json)>262144) { throw new RuntimeException('Invalid projected response.'); }
+        $success='bk_dropify_batch_success_'.hash('sha256',$scope['BAKATA_DROPIFY_CATALOG_APPROVAL_REF']);
+        $value=wp_json_encode(['store'=>$store,'offset'=>($page-1)*10,'rows'=>count($snapshot['rows']),'at'=>gmdate(DATE_ATOM)]);
+        if (!is_string($value) || $wpdb->insert($wpdb->options,['option_name'=>$success,'option_value'=>$value,'autoload'=>'no'],['%s','%s','%s'])!==1) {
+            throw new RuntimeException('Cannot record projected page.');
+        }
     } finally { $wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)',$lock)); }
     WP_CLI::line($json);
 } catch (Throwable $e) {

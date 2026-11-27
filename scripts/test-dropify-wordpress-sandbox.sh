@@ -30,6 +30,7 @@ cp "$dropify" "$temp/dropify.zip"
 cp "$woo" "$temp/woocommerce.zip"
 cp "$repo/tools/dropify-quarantine/sandbox-fixture.php" "$temp/sandbox-fixture.php"
 cp "$repo/scripts/test-dropify-sandbox-http.php" "$temp/http.php"
+cp "$repo/scripts/dropify-capture-page.php" "$temp/capture-page.php"
 chmod 644 "$temp/"*
 for image in mariadb:11.4 wordpress:php8.3-apache wordpress:cli-php8.3; do
   docker pull "$image" >/dev/null
@@ -84,3 +85,36 @@ cli eval 'global $wpdb; foreach(["bk_fixture_unexpected_provider","bk_fixture_ba
 PYTHONPATH="$repo/services/intelligence" python3 -m intelligence.dropify_bridge --db "$temp/catalog.sqlite" ingest "$temp/snapshot.json" --operator ci-wordpress
 PYTHONPATH="$repo/services/intelligence" python3 -m intelligence.dropify_bridge --db "$temp/catalog.sqlite" candidates --store 7 --in-stock | python3 -c 'import json,sys; r=json.load(sys.stdin); assert len(r)==1 and r[0]["external_id"]=="96" and r[0]["base_price"]=="7000.25"'
 echo 'Real WordPress/WooCommerce sandbox: activation, admin HTTP, MariaDB receipt and offline archive passed.'
+
+# Reuse the same disposable WordPress installation and synthetic token.
+cli option update bk_fixture_enabled 0
+cli option update bk_fixture_http_calls 0
+expiry=$(($(date +%s)+600))
+cli option update bk_fixture_batch_expiry "$expiry"
+cli option update bk_fixture_batch_enabled 1
+# Fixed reviewed wrapper: receives only run, store and page arguments.
+{
+  printf '#!/usr/bin/env bash\nexec '
+  printf '%q ' docker run --rm --pull=never --network "$network" --user 33:33 -e HOME=/tmp "${common[@]}" wordpress:cli-php8.3 wp --user=sandbox_admin eval-file /fixtures/capture-page.php
+  printf '"$@"\n'
+} > "$temp/capture-wrapper"
+chmod 700 "$temp/capture-wrapper"
+# Unauthorized page or subscriber must not consume a receipt.
+if cli --user=sandbox_reader eval-file /fixtures/capture-page.php ci-paged-capture 7 1; then exit 1; fi
+if cli --user=sandbox_admin eval-file /fixtures/capture-page.php ci-paged-capture 7 2; then exit 1; fi
+test "$(cli option get bk_fixture_http_calls)" = 0
+run_capture() {
+  PYTHONPATH="$repo/services/intelligence" python3 -m intelligence.dropify_capture --workspace "$temp/batch" \
+    --db "$temp/catalog.sqlite" --wrapper "$temp/capture-wrapper" --run ci-paged-capture --store 7 \
+    --first 1 --last 3 --until "$expiry" --operator ci-wordpress
+}
+run_capture | python3 -c 'import json,sys; r=json.load(sys.stdin); assert r["pages_archived"]==2 and r["unique_ids_in_window"]==13 and r["new_observations"]==13 and r["connector_calls_this_execution"]==2 and r["stop_reason"]=="partial-or-empty-page" and not r["coverage_verified"]'
+run_capture | python3 -c 'import json,sys; r=json.load(sys.stdin); assert r["pages_archived"]==2 and r["connector_calls_this_execution"]==0 and r["new_observations"]==0'
+test "$(cli option get bk_fixture_http_calls)" = 2
+# A directly repeated page and a page after a partial response both fail closed.
+if cli --user=sandbox_admin eval-file /fixtures/capture-page.php ci-paged-capture 7 1; then exit 1; fi
+if cli --user=sandbox_admin eval-file /fixtures/capture-page.php ci-paged-capture 7 3; then exit 1; fi
+test "$(cli option get bk_fixture_http_calls)" = 2
+cli eval 'global $wpdb; foreach(["bk_fixture_unexpected_provider","bk_fixture_bad_request","bk_fixture_unsafe_hook"] as $key) if(get_option($key)!==false) throw new RuntimeException("Unexpected fixture behavior"); if(wp_count_posts("product")->publish || wp_count_posts("product")->draft || wc_orders_count("processing")) throw new RuntimeException("Unexpected commercial mutation");'
+PYTHONPATH="$repo/services/intelligence" python3 -m intelligence.dropify_bridge --db "$temp/catalog.sqlite" candidates --store 7 --in-stock | python3 -c 'import json,sys; r=json.load(sys.stdin); assert len(r)==14 and len({x["external_id"] for x in r})==14 and all("canary" not in json.dumps(x) for x in r)'
+echo 'Paged WP-CLI connector to SQLite archive: 13 unique projected fixture products, two calls, replay zero calls.'

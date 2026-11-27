@@ -18,6 +18,16 @@ if (get_option('bk_fixture_enabled') === '1') {
     define('BAKATA_DROPIFY_CATALOG_APPROVED_QUERY', 'fixture');
 }
 
+if (get_option('bk_fixture_batch_enabled') === '1') {
+    define('BAKATA_DROPIFY_BATCH_ENABLED',true);
+    define('BAKATA_DROPIFY_BATCH_HOST','localhost');
+    define('BAKATA_DROPIFY_BATCH_RUN','ci-paged-capture');
+    define('BAKATA_DROPIFY_BATCH_STORE','7');
+    define('BAKATA_DROPIFY_BATCH_FIRST',1);
+    define('BAKATA_DROPIFY_BATCH_LAST',3);
+    define('BAKATA_DROPIFY_BATCH_UNTIL',(int)get_option('bk_fixture_batch_expiry'));
+}
+
 // Every WordPress HTTP request is intercepted. The Docker network independently
 // prevents egress even for code that does not use the WordPress HTTP API.
 add_filter('pre_http_request', static function ($pre, $args, $url) {
@@ -29,6 +39,31 @@ add_filter('pre_http_request', static function ($pre, $args, $url) {
     }
     $count = (int)get_option('bk_fixture_http_calls', 0) + 1;
     update_option('bk_fixture_http_calls', (string)$count, false);
+    if (get_option('bk_fixture_batch_enabled') === '1') {
+        $body=json_decode($args['body']??'',true);
+        $approval='batch-'.hash('sha256','ci-paged-capture:'.$count);
+        $receipt='bk_dropify_catalog_'.hash('sha256',$approval);
+        if (!defined('WP_CLI') || !WP_CLI || !in_array($count,[1,2],true)
+            || get_option($receipt)===false || ($body['startData']??null)!==($count-1)*10
+            || ($body['pageSize']??null)!==10 || ($body['keywords']??null)!==''
+            || ($body['order_by']??null)!=='id' || ($body['order_type']??null)!=='asc'
+            || ($args['method']??null)!=='POST' || ($args['sslverify']??null)!==true
+            || ($args['redirection']??null)!==0 || ($args['reject_unsafe_urls']??null)!==true
+            || ($args['timeout']??null)!==15 || ($args['limit_response_size']??null)!==524288
+            || ($args['headers']['dropi-integration-key']??'')!=='ci-only-token-canary') {
+            update_option('bk_fixture_bad_request','1',false);
+            return new WP_Error('bk_fixture_bad_request','Invalid paged fixture request.');
+        }
+        $items=[];
+        for ($i=0;$i<($count===1?10:3);$i++) {
+            $id=1000+($count-1)*10+$i;
+            $items[]=['id'=>$id,'name'=>'Fixture product '.$id,'sku'=>'00'.$id,'type'=>'SIMPLE',
+                'stock'=>5,'sale_price'=>'7000.25','suggested_price'=>17000,
+                'description'=>'opaque-canary','user'=>['name'=>'Fixture warehouse','email'=>'private-canary']];
+        }
+        return ['headers'=>[],'body'=>wp_json_encode(['isSuccess'=>true,'objects'=>$items]),
+            'response'=>['code'=>200,'message'=>'OK'],'cookies'=>[],'filename'=>null];
+    }
     $receipt = 'bk_dropify_catalog_' . hash('sha256', 'ci-wordpress-approval');
     $body = json_decode($args['body'] ?? '', true);
     if ($count !== 1 || get_option($receipt) === false
