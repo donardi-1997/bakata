@@ -160,7 +160,7 @@ class PilotLedger:
                 raise PolicyError("Pilot receipt changed; manual review required")
 
 
-def execute(raw, confirmation, ledger, *, transport=https_get):
+def execute(raw, confirmation, ledger, *, transport=https_get, archive=None):
     """One GET only, no redirects/retries. Trusted local operator; no remote endpoint."""
     import hmac
     pilot = load_manifest(raw)
@@ -179,9 +179,14 @@ def execute(raw, confirmation, ledger, *, transport=https_get):
         at = utcnow()
         pilot.validate(at)
         spec = SourceSpec(pilot.source,pilot.host,SourceKind.STORE_API,pilot.permission,pilot.approved_until)
-        batch = import_capture(SourceRegistry((spec,)),Capture(pilot.source,pilot.url,at,response.body),now=at)
+        registry = SourceRegistry((spec,))
+        capture = Capture(pilot.source,pilot.url,at,response.body)
+        batch = import_capture(registry,capture,now=at)
+        capture_id = None
+        if archive is not None:
+            capture_id, _ = archive.ingest(registry,capture,now=at)
         ledger.finish(pilot,"succeeded",batch.evidence.sha256)
-        return {"mode":"authorized-pilot","manifest_sha256":pilot.digest,"evidence":asdict(batch.evidence),
+        return {"mode":"authorized-pilot","manifest_sha256":pilot.digest,"capture_id":capture_id,"evidence":asdict(batch.evidence),
                 "observations":[asdict(row) for row in batch.observations]}
     except Exception:
         ledger.finish(pilot,"failed-review")
@@ -194,11 +199,13 @@ def main():
     import os
     from pathlib import Path
     import signal
+    from .storage import CommercialStore
 
     parser = argparse.ArgumentParser(description="One-shot authorized Store API pilot")
     parser.add_argument("command",choices=("plan","execute"))
     parser.add_argument("--manifest",required=True,type=Path)
     parser.add_argument("--ledger",type=Path)
+    parser.add_argument("--archive",type=Path)
     parser.add_argument("--confirm")
     args=parser.parse_args()
     os.umask(0o077)
@@ -209,15 +216,17 @@ def main():
         print(json.dumps({"mode":"plan","enabled":pilot.enabled,"url":pilot.url,"approved_ip":pilot.ip,
                           "manifest_sha256":pilot.digest,"approved_until":pilot.approved_until.isoformat()}))
         return
-    if args.ledger is None or args.confirm is None:
-        parser.error("execute requires --ledger and --confirm")
+    if args.ledger is None or args.archive is None or args.confirm is None:
+        parser.error("execute requires --ledger, --archive and --confirm")
+    if args.ledger.resolve() == args.archive.resolve() or (args.ledger.exists() and args.archive.exists() and args.ledger.samefile(args.archive)):
+        parser.error("Use separate archive and receipt databases")
     if not pilot.enabled or args.confirm != pilot.digest:
         parser.error("execute requires enabled manifest and matching digest")
     # Linux one-shot process deadline includes DNS, TLS and body. A killed
     # process leaves a reserved receipt, never an automatic retry.
     signal.alarm(30)
-    with closing(sqlite3.connect(args.ledger,timeout=5)) as db:
-        result=execute(raw,args.confirm,PilotLedger(db))
+    with closing(sqlite3.connect(args.archive,timeout=5)) as archive_db, closing(sqlite3.connect(args.ledger,timeout=5)) as db:
+        result=execute(raw,args.confirm,PilotLedger(db),archive=CommercialStore(archive_db))
     signal.alarm(0)
     print(json.dumps(result,ensure_ascii=False,default=lambda value:value.isoformat()))
 
