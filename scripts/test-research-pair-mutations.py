@@ -33,6 +33,15 @@ MUTATIONS = {
     "skip startedBy identity check": ('or task.get("startedBy") != token[:32]', "or False"),
     "stale clock for stop claim": ('{"type": "claim-stop", "role": role, "at": _now(self.clock())}',
                                    '{"type": "claim-stop", "role": role, "at": now}'),
+    "role override accepted": ('if overrides.get("taskRoleArn") or overrides.get("executionRoleArn"):',
+                               "if False:"),
+    "command/env override accepted": ('if set(overrides) - {"containerOverrides"} or overrides.get("containerOverrides") != expected:',
+                                      "if False:"),
+    "unsafe own task not stopped": ("observed[role] = exc.status", "pass"),
+    "observation not isolated": ("except Exception as exc:  # identity unverified",
+                                 "except ZeroDivisionError as exc:  # identity unverified"),
+    "foreign subnet accepted": ('if subnets and subnets != {getattr(c, role + "_subnet")}:', "if False:"),
+    "running without ENI accepted": ('if last == "RUNNING" and not subnets:', "if False:"),
     "skewed claim defers reconcile": ("abs(now - claimed_at[role])", "(now - claimed_at[role])"),
     "supervise ignores enabled": (
         '        """Tick: never launches, never releases the slot; isolates failures per role."""\n'

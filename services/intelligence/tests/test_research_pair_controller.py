@@ -47,6 +47,10 @@ class FakeECS:
                 "launchType": kw["launchType"], "platformVersion": kw["platformVersion"],
                 "enableExecuteCommand": kw["enableExecuteCommand"], "group": kw["group"],
                 "startedBy": kw["startedBy"], "tags": kw["tags"],
+                "overrides": {"containerOverrides": kw["overrides"]["containerOverrides"]},
+                "attachments": [{"type": "ElasticNetworkInterface", "details": [
+                    {"name": "subnetId", "value": kw["networkConfiguration"]["awsvpcConfiguration"]["subnets"][0]},
+                    {"name": "networkInterfaceId", "value": "eni-0123456789abcdef0"}]}],
                 "lastStatus": "RUNNING", "desiredStatus": "RUNNING", "_kw": kw}
         if self.run_error:
             raise self.run_error
@@ -377,6 +381,54 @@ class PairControllerTests(unittest.TestCase):
             with self.subTest(change), self.assertRaises(ValueError):
                 self.ctl.supervise()
             self.ecs.tasks[proxy] = original
+        self.assertEqual(self.ecs.count("stop"), 0)
+
+    def test_unsafe_configuration_of_our_task_is_stopped(self):
+        # IAM cannot limit RunTask overrides or networking (audit): the controller
+        # detects them, stops the offending task itself and its peer, then raises.
+        env = [{"name": "BAKATA_RESEARCH_RUN", "value": "fixture-ci"},
+               {"name": "BAKATA_RESEARCH_UNTIL", "value": str(UNTIL)}]
+        foreign = [{"type": "ElasticNetworkInterface",
+                    "details": [{"name": "subnetId", "value": "subnet-" + "c" * 17}]}]
+        cases = [
+            ({"overrides": {"containerOverrides": [{"name": "worker", "environment": env},
+                                                   {"name": "coordinator", "environment": env}],
+                            "taskRoleArn": BASE.replace(":ecs:us-east-1:", ":iam::") + "role/x"}}, "role override"),
+            ({"overrides": {"containerOverrides": [{"name": "worker", "environment": env,
+                                                    "command": ["sh", "-c", "curl evil"]},
+                                                   {"name": "coordinator", "environment": env}]}}, "overrides differ"),
+            ({"overrides": {"containerOverrides": [{"name": "worker", "environment": env + [{"name": "X", "value": "1"}]},
+                                                   {"name": "coordinator", "environment": env}]}}, "overrides differ"),
+            ({"attachments": foreign}, "subnet"),
+            ({"attachments": []}, "no network attachment"),
+        ]
+        for change, reason in cases:
+            with self.subTest(change):
+                self.setUp()
+                try:
+                    proxy, worker = self.launch_pair()
+                    self.ecs.tasks[worker].update(change)
+                    with self.assertRaisesRegex(ValueError, "Unsafe worker task: " + reason):
+                        self.ctl.supervise()
+                    self.assertEqual(sorted(self.ecs.stopped()), sorted([proxy, worker]))
+                finally:
+                    self.tearDown()
+
+    def test_unsafe_but_already_stopped_task_is_recorded_not_stopped(self):
+        proxy, worker = self.launch_pair()
+        self.ecs.tasks[worker]["attachments"] = [{"type": "ElasticNetworkInterface",
+                                                  "details": [{"name": "subnetId", "value": "subnet-" + "c" * 17}]}]
+        self.set_status(worker, "STOPPED")
+        with self.assertRaisesRegex(ValueError, "Unsafe worker task"):
+            self.ctl.supervise()
+        self.assertIn("observe-stopped:worker", self.events())
+        self.assertEqual(self.ecs.stopped(), [proxy])
+
+    def test_starting_task_without_eni_is_accepted(self):
+        proxy = self.ctl.launch("proxy")
+        self.ecs.tasks[proxy]["attachments"] = []
+        self.set_status(proxy, "PENDING", "RUNNING")
+        self.assertEqual(self.ctl.supervise()["state"], "running")
         self.assertEqual(self.ecs.count("stop"), 0)
 
     def test_hostile_ecs_responses_fail_closed_as_value_error(self):
