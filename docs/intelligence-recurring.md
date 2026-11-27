@@ -33,3 +33,7 @@ Configure y list no contactan fuentes. Tick procesa como máximo una captura ven
 ## Validación
 
 Diez pruebas unitarias sintéticas, transport mock, bases temporales: exige piloto archivado, evita duplicar registros, respeta frecuencia y presupuesto, no acumula intervalos, bloquea ante 429, interrupción y fallo de persistencia, verifica digest, vencimiento y políticas. CI existente descubre estas pruebas. No hay resultados de rendimiento comercial, egress real, DNS de proveedor ni datos reales. Antes de habilitar recurrencia: autorización real, política de retención y renovación/revocación, operación de conciliación, prueba de carga y supervisión de infraestructura. INT-14 calibrará scoring con evidencia revisada; no inventar métricas reales.
+
+## Corrección de CI
+
+La ejecución 45915254636 pasó las 94 pruebas de Intelligence, incluidas las diez pruebas de recurrencia, así como TLS local, persistencia, aislamiento, contrato PHP y smoke de WordPress. Falló al instalar dependencias de Chromium: APT recibió HTTP 403 de packages.microsoft.com para Ubuntu 26.04 resolute. Se fija únicamente el job checks a ubuntu-24.04 LTS para estabilizar la plataforma de QA; se conserva Playwright con --with-deps, la verificación de paquetes y todas las pruebas. No se modifica el job deploy_dev ni se considera confirmada la solución hasta que la nueva ejecución pase.
