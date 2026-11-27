@@ -1,6 +1,6 @@
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, Inexact, ROUND_DOWN, ROUND_UP, localcontext
 import unittest
 
 from intelligence.models import Observation
@@ -117,3 +117,81 @@ class ScoringTests(unittest.TestCase):
             rank_review_ready((complete,replace(higher,as_of=self.now+timedelta(seconds=1))))
         with self.assertRaises(ValueError):
             rank_review_ready((complete,replace(higher,max_age=timedelta(days=2))))
+
+    def test_decimal_context_isolation_and_limits(self):
+        cases = (
+            self.econ,
+            replace(self.econ, sale_price_minor=3, supplier_cost_minor=2,
+                    shipping_minor=0, fixed_fee_minor=0, return_reserve_minor=0,
+                    other_cost_minor=0, variable_deduction_bps=0),
+            replace(self.econ, sale_price_minor=1, supplier_cost_minor=10**12,
+                    shipping_minor=10**12, fixed_fee_minor=10**12,
+                    return_reserve_minor=10**12, other_cost_minor=10**12,
+                    variable_deduction_bps=10000),
+            replace(self.econ, sale_price_minor=10**12, supplier_cost_minor=0,
+                    shipping_minor=0, fixed_fee_minor=0, return_reserve_minor=0,
+                    other_cost_minor=0, variable_deduction_bps=0),
+            replace(self.econ, shipping_minor=None),
+        )
+        baseline = [(econ.margin_pct, self.score(economics=econ)) for econ in cases]
+        for rounding in (ROUND_DOWN, ROUND_UP):
+            with self.subTest(rounding=rounding), localcontext() as context:
+                context.prec = 2
+                context.rounding = rounding
+                context.Emin = -2
+                context.Emax = 2
+                for signal in context.traps:
+                    context.traps[signal] = True
+                context.clear_flags()
+                context.flags[Inexact] = True
+                before = context.copy()
+                self.assertEqual([(econ.margin_pct, self.score(economics=econ))
+                                  for econ in cases], baseline)
+                self.assertEqual(context.prec, before.prec)
+                self.assertEqual(context.rounding, before.rounding)
+                self.assertEqual((context.Emin, context.Emax), (before.Emin, before.Emax))
+                self.assertEqual(context.traps, before.traps)
+                self.assertEqual(context.flags, before.flags)
+
+    def test_ranking_does_not_round_or_trap_on_negation(self):
+        result = self.score()
+        lower = replace(result, observation_key=("a", "001", "x"), total=Decimal("77.71"))
+        higher = replace(result, observation_key=("z", "002", "x"), total=Decimal("77.79"))
+        with localcontext() as context:
+            context.prec = 2
+            context.traps[Inexact] = True
+            self.assertEqual(rank_review_ready((lower, higher)), (higher, lower))
+
+    def test_half_up_and_profitability_thresholds_ignore_caller_context(self):
+        def economics(sale, contribution):
+            return replace(self.econ, sale_price_minor=sale,
+                           supplier_cost_minor=sale - contribution, shipping_minor=0,
+                           fixed_fee_minor=0, return_reserve_minor=0, other_cost_minor=0,
+                           variable_deduction_bps=0)
+
+        # The six manual criteria contribute 56.25 points. At a sale price
+        # of 500000, contributions 29, 30 and 31 yield profitability points
+        # immediately below, exactly at, and immediately above 0.005.
+        totals = ((29, "56.25"), (30, "56.26"), (31, "56.26"))
+        # At a price of 1000, each unit is 0.1 percentage points of margin.
+        boundaries = ((-1, "0", ScreeningStatus.BLOCKED),
+                      (0, "0", ScreeningStatus.BLOCKED),
+                      (1, "0.3333333333333333333333333333", ScreeningStatus.REVIEW_READY),
+                      (299, "99.66666666666666666666666667", ScreeningStatus.REVIEW_READY),
+                      (300, "100", ScreeningStatus.REVIEW_READY),
+                      (301, "100", ScreeningStatus.REVIEW_READY))
+        for rounding in (ROUND_DOWN, ROUND_UP):
+            with self.subTest(rounding=rounding), localcontext() as context:
+                context.prec = 2
+                context.rounding = rounding
+                for signal in context.traps:
+                    context.traps[signal] = True
+                for contribution, expected in totals:
+                    with self.subTest(contribution=contribution):
+                        self.assertEqual(self.score(economics=economics(500000, contribution)).total,
+                                         Decimal(expected))
+                for contribution, expected, status in boundaries:
+                    with self.subTest(contribution=contribution):
+                        result = self.score(economics=economics(1000, contribution))
+                        self.assertEqual(result.status, status)
+                        self.assertEqual(result.components[0].score, Decimal(expected))

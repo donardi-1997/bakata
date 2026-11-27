@@ -1,6 +1,9 @@
 import hashlib
 import json
 import sqlite3
+import subprocess
+import sys
+import threading
 from contextlib import closing
 from datetime import timedelta
 from pathlib import Path
@@ -9,8 +12,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 from intelligence.pilot import PilotLedger, execute, utcnow
-from intelligence.recurring import RecurringCapture, MIN_INTERVAL
-from intelligence.storage import CommercialStore
+from intelligence.recurring import RecurringCapture, MIN_INTERVAL, inspect_interrupted
+from intelligence.storage import CommercialStore, APPLICATION_ID
 from intelligence.transport import Response, PolicyError, FetchError
 
 
@@ -167,3 +170,222 @@ class RecurringTests(unittest.TestCase):
         self.assertEqual(self.scheduler.list()[0]["state"],"blocked")
         self.assertIsNone(self.tick(12))
         self.assertEqual(self.transport.call_count,1)
+
+    def test_inspect_before_archive_does_not_infer_no_request_or_mutate(self):
+        self.pilot()
+        self.configure()
+        self.transport.side_effect=KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):
+            self.tick(6)
+        before=(list(self.db.iterdump()),list(self.archive_db.iterdump()))
+        self.transport.reset_mock()
+        with patch("intelligence.recurring.https_get",side_effect=AssertionError("network")):
+            result=inspect_interrupted(self.db,self.archive_db)
+        self.assertEqual(result[0]["evidence"],"absent")
+        self.assertEqual(result[0]["candidates"],[])
+        self.assertEqual(result[0]["remaining"],1)
+        self.assertEqual(before,(list(self.db.iterdump()),list(self.archive_db.iterdump())))
+        self.transport.assert_not_called()
+        self.assertEqual(self.scheduler.list()[0]["state"],"running")
+
+    def test_inspect_after_archive_and_ambiguous_candidates(self):
+        self.pilot()
+        self.configure()
+        with patch.object(self.scheduler,"_finish",side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                self.tick(6)
+        before=(list(self.db.iterdump()),list(self.archive_db.iterdump()))
+        result=inspect_interrupted(self.db,self.archive_db)
+        self.assertEqual(result[0]["evidence"],"unique")
+        self.assertEqual(len(result[0]["candidates"]),1)
+        self.assertEqual(before,(list(self.db.iterdump()),list(self.archive_db.iterdump())))
+        row=list(self.archive_db.execute("SELECT * FROM captures ORDER BY observed_at DESC LIMIT 1").fetchone())
+        row[0]="a"*64
+        row[3]=(self.now+timedelta(hours=7)).isoformat()
+        self.archive_db.execute("INSERT INTO captures VALUES (?,?,?,?,?,?,?,?,?,?,?)",row)
+        self.archive_db.commit()
+        before=(list(self.db.iterdump()),list(self.archive_db.iterdump()))
+        result=inspect_interrupted(self.db,self.archive_db)
+        self.assertEqual(result[0]["evidence"],"ambiguous")
+        self.assertEqual(len(result[0]["candidates"]),2)
+        self.assertEqual(before,(list(self.db.iterdump()),list(self.archive_db.iterdump())))
+        self.assertEqual(self.scheduler.list()[0]["state"],"running")
+
+    def test_inspect_inconsistent_reservation(self):
+        self.pilot()
+        self.configure()
+        self.transport.side_effect=KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):
+            self.tick(6)
+        self.db.execute("UPDATE int_recurring_events SET state='failed-review'")
+        self.db.commit()
+        self.assertEqual(inspect_interrupted(self.db,self.archive_db)[0]["evidence"],"inconsistent")
+
+    def test_inspect_rejects_missing_archive_columns_even_without_running(self):
+        self.pilot()
+        self.configure()
+        self.archive_db.execute("ALTER TABLE captures RENAME TO missing_captures")
+        self.archive_db.commit()
+        with self.assertRaisesRegex(ValueError,"Inspection failed"):
+            inspect_interrupted(self.db,self.archive_db)
+        process=subprocess.run([sys.executable,"-m","intelligence.recurring",
+            "--ledger",str(self.ledger_path),"--archive",str(self.archive_path),"inspect"],
+            capture_output=True,text=True)
+        self.assertNotEqual(process.returncode,0)
+        self.assertNotIn("Traceback",process.stderr)
+
+    def test_inspect_reserved_event_before_finished_attempt_is_inconsistent(self):
+        self.pilot()
+        self.configure()
+        self.transport.side_effect=KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):
+            self.tick(6)
+        self.db.execute("INSERT INTO int_recurring_events VALUES (?,?,?,'succeeded',?)",
+                        (self.data["host"],2,(self.now+timedelta(hours=7)).isoformat(),"a"*64))
+        self.db.commit()
+        before=(list(self.db.iterdump()),list(self.archive_db.iterdump()))
+        result=inspect_interrupted(self.db,self.archive_db)
+        self.assertEqual(result[0]["evidence"],"inconsistent")
+        self.assertEqual(result[0]["candidates"],[])
+        self.assertEqual(before,(list(self.db.iterdump()),list(self.archive_db.iterdump())))
+
+    def test_inspect_prior_failure_or_excess_budget_is_inconsistent(self):
+        self.pilot()
+        self.configure()
+        self.transport.side_effect=KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):
+            self.tick(6)
+        host=self.data["host"]
+        started=(self.now+timedelta(hours=6)).isoformat()
+        earlier=(self.now+timedelta(hours=5)).isoformat()
+        self.db.execute("UPDATE int_recurring_events SET attempt=2")
+        self.db.execute("INSERT INTO int_recurring_events VALUES (?,1,?,'failed-review',NULL)",(host,earlier))
+        self.db.execute("UPDATE int_recurring SET remaining=1")
+        self.db.commit()
+        self.assertEqual(inspect_interrupted(self.db,self.archive_db)[0]["evidence"],"inconsistent")
+        self.db.execute("UPDATE int_recurring_events SET state='succeeded' WHERE attempt=1")
+        self.db.execute("UPDATE int_recurring SET remaining=3")
+        self.db.commit()
+        self.assertEqual(inspect_interrupted(self.db,self.archive_db)[0]["evidence"],"inconsistent")
+        self.db.execute("UPDATE int_recurring SET remaining=2,last_attempt=?",(started,))
+        self.db.commit()
+        self.assertEqual(inspect_interrupted(self.db,self.archive_db)[0]["evidence"],"absent")
+
+    def test_inspect_concurrent_capture_and_cli_read_only(self):
+        self.pilot()
+        self.configure()
+        entered=threading.Event()
+        release=threading.Event()
+        errors=[]
+        def transport(*args,**kwargs):
+            entered.set()
+            if not release.wait(10):
+                raise RuntimeError("test timeout")
+            return self.response()
+        def worker():
+            try:
+                with closing(sqlite3.connect(self.ledger_path)) as db, closing(sqlite3.connect(self.archive_path)) as archive:
+                    scheduler=RecurringCapture(db,CommercialStore(archive))
+                    with patch.object(scheduler,"_finish",side_effect=KeyboardInterrupt):
+                        scheduler.tick(self.raw(),transport=transport)
+            except KeyboardInterrupt:
+                pass
+            except BaseException as exc:
+                errors.append(exc)
+        with patch("intelligence.recurring.utcnow",return_value=self.now+timedelta(hours=6)):
+            thread=threading.Thread(target=worker)
+            thread.start()
+            try:
+                self.assertTrue(entered.wait(10))
+                before=(list(self.db.iterdump()),list(self.archive_db.iterdump()))
+                process=subprocess.run([sys.executable,"-m","intelligence.recurring",
+                    "--ledger",str(self.ledger_path),"--archive",str(self.archive_path),"inspect"],
+                    capture_output=True,text=True,check=True)
+                self.assertEqual(json.loads(process.stdout)[0]["evidence"],"absent")
+                self.assertEqual(before,(list(self.db.iterdump()),list(self.archive_db.iterdump())))
+            finally:
+                release.set()
+                thread.join(10)
+            self.assertFalse(thread.is_alive())
+        self.assertEqual(errors,[])
+        self.assertEqual(inspect_interrupted(self.db,self.archive_db)[0]["evidence"],"unique")
+
+    def test_inspection_tampered_data_never_discloses_canary(self):
+        self.pilot()
+        self.configure()
+        with patch.object(self.scheduler,"_finish",side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                self.tick(6)
+        canary="SECRET_CANARY_TOKEN"
+        self.archive_db.execute("UPDATE captures SET url=? WHERE observed_at>?",(
+            "https://catalog.example.com/?token="+canary,self.now.isoformat()))
+        self.archive_db.commit()
+        def cli():
+            return subprocess.run([sys.executable,"-m","intelligence.recurring",
+                "--ledger",str(self.ledger_path),"--archive",str(self.archive_path),"inspect"],
+                capture_output=True,text=True)
+        before=(list(self.db.iterdump()),list(self.archive_db.iterdump()))
+        with patch("intelligence.recurring.https_get",side_effect=AssertionError("network")):
+            self.assertNotIn(canary,repr(inspect_interrupted(self.db,self.archive_db)))
+            process=cli()
+        self.assertEqual(process.returncode,0)
+        self.assertNotIn(canary,process.stdout+process.stderr)
+        self.assertEqual(before,(list(self.db.iterdump()),list(self.archive_db.iterdump())))
+        self.db.execute("UPDATE int_recurring_events SET started=?",(canary,))
+        self.db.execute("UPDATE int_recurring SET last_attempt=?",(canary,))
+        self.db.commit()
+        process=cli()
+        self.assertNotEqual(process.returncode,0)
+        self.assertNotIn(canary,process.stdout+process.stderr)
+        self.assertNotIn("Traceback",process.stderr)
+        with self.assertRaisesRegex(ValueError,"Inspection failed") as error:
+            inspect_interrupted(self.db,self.archive_db)
+        self.assertNotIn(canary,str(error.exception))
+        self.db.execute("UPDATE int_recurring_events SET started=(SELECT last_attempt FROM int_recurring)")
+        self.db.execute("UPDATE int_recurring SET last_attempt=?",
+                        ((self.now+timedelta(hours=6)).isoformat(),))
+        self.db.execute("UPDATE int_recurring_events SET started=(SELECT last_attempt FROM int_recurring)")
+        self.db.commit()
+        self.archive_db.execute("UPDATE captures SET observed_at=? WHERE observed_at>?",(canary,self.now.isoformat()))
+        self.archive_db.commit()
+        process=cli()
+        self.assertNotEqual(process.returncode,0)
+        self.assertNotIn(canary,process.stdout+process.stderr)
+
+    def test_inspection_rejects_wrong_and_corrupt_databases(self):
+        self.pilot()
+        self.configure()
+        self.archive_db.execute("PRAGMA application_id=123")
+        with self.assertRaisesRegex(ValueError,"Inspection failed"):
+            inspect_interrupted(self.db,self.archive_db)
+        self.archive_db.execute(f"PRAGMA application_id={APPLICATION_ID}")
+        self.archive_db.execute("PRAGMA user_version=99")
+        with self.assertRaisesRegex(ValueError,"Inspection failed"):
+            inspect_interrupted(self.db,self.archive_db)
+        self.archive_db.execute("PRAGMA user_version=2")
+        self.db.execute("PRAGMA user_version=1")
+        with self.assertRaisesRegex(ValueError,"Inspection failed"):
+            inspect_interrupted(self.db,self.archive_db)
+        bad=Path(self.temp.name)/"SECRET_CANARY_CORRUPT.sqlite"
+        bad.write_bytes(b"SECRET_CANARY_NOT_A_SQLITE_DATABASE")
+        process=subprocess.run([sys.executable,"-m","intelligence.recurring","--ledger",str(self.ledger_path),
+            "--archive",str(bad),"inspect"],capture_output=True,text=True)
+        self.assertNotEqual(process.returncode,0)
+        self.assertNotIn("SECRET_CANARY",process.stdout+process.stderr)
+        self.assertNotIn("Traceback",process.stderr)
+
+    def test_inspection_truncation_cannot_report_unique(self):
+        self.pilot()
+        self.configure()
+        with patch.object(self.scheduler,"_finish",side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                self.tick(6)
+        row=list(self.archive_db.execute("SELECT * FROM captures ORDER BY observed_at DESC LIMIT 1").fetchone())
+        for i in range(101):
+            row[0]=f"{i:064x}"
+            row[3]=(self.now+timedelta(hours=7,microseconds=i)).isoformat()
+            self.archive_db.execute("INSERT INTO captures VALUES (?,?,?,?,?,?,?,?,?,?,?)",row)
+        self.archive_db.commit()
+        result=inspect_interrupted(self.db,self.archive_db)
+        self.assertEqual(result[0]["evidence"],"truncated")
+        self.assertLessEqual(len(result[0]["candidates"]),100)

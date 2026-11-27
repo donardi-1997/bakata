@@ -13,8 +13,8 @@
 .bk-header-search .bk-field { flex: 1; min-width: 0; border-radius: var(--bk-radius-pill); }
 .bk-header-desktop-nav { display: none; }
 .bk-header-menu { position: relative; }
-.bk-header-menu summary { list-style: none; }
-.bk-header-menu summary::-webkit-details-marker { display: none; }
+.bk-header-menu > summary { list-style: none; }
+.bk-header-menu > summary::-webkit-details-marker { display: none; }
 .bk-header-mobile-nav { position: absolute; z-index: 10; top: calc(100% + .25rem); inset-inline-start: 0; min-width: 10rem; background: var(--bk-surface); border: 1px solid var(--bk-border); border-radius: var(--bk-radius-md); box-shadow: var(--bk-shadow); padding: .5rem; }
 .bk-header-mobile-nav a, .bk-header-desktop-nav a { display: flex; align-items: center; min-height: 44px; padding-inline: .65rem; font-weight: 600; color: var(--bk-primary); text-decoration: none; }
 .bk-header-mobile-nav a:hover, .bk-header-desktop-nav a:hover, .bk-header-desktop-nav a[aria-current="page"] { text-decoration: underline; text-underline-offset: .25em; }
@@ -39,6 +39,14 @@
 
 /* Native disclosure navigation: no hover or JavaScript dependency. */
 .bk-header-mobile-nav { width:min(20rem, calc(100vw - 2rem)); max-height:60vh; overflow:auto; box-sizing:border-box; }
+/* An open mobile menu must not cover the search row or other header controls. */
+@media (max-width:63.999rem) {
+  .bk-header-menu[open] { grid-column:1 / -1; grid-row:1; }
+  .bk-header-menu[open] .bk-header-mobile-nav { position:static; width:100%; margin-top:.25rem; }
+  .bk-header-menu[open] ~ .bk-header-brand { grid-column:1 / -1; grid-row:2; }
+  .bk-header-menu[open] ~ .bk-header-search { grid-column:1 / -1; grid-row:3; }
+  .bk-header-menu[open] ~ .bk-header-actions { grid-column:1 / -1; grid-row:4; }
+}
 .bk-mobile-category summary, .bk-mega summary { cursor:pointer; min-height:44px; box-sizing:border-box; padding:.65rem; font-weight:600; color:var(--bk-primary); }
 .bk-mobile-category summary { list-style:revert; }
 .bk-mobile-category a { padding-inline-start:1.25rem; overflow-wrap:anywhere; }

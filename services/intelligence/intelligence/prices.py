@@ -5,6 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from itertools import combinations
 from .models import Observation
 from .matching import ReviewedLink
+from .references import ref
 import re
 
 CURRENCIES = ("COP", "USD", "EUR")
@@ -199,8 +200,9 @@ def market_comparison(quotes: tuple[Quote, ...], links: tuple[ReviewedLink, ...]
     reviewed = set()
     for link in links:
         pair = frozenset((link.left_key, link.right_key))
-        if pair not in expected or pair in reviewed or not isinstance(link.review_ref, str) or not link.review_ref.strip():
+        if pair not in expected or pair in reviewed:
             raise ValueError("Invalid, duplicate or stale equivalence review")
+        ref(link.review_ref)
         reviewed.add(pair)
     stats = _stats([total for _, total in totals])
     return MarketComparison(currency, context.destination, context.price_kind, context.condition,

@@ -1,16 +1,35 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
+import { referencedMessages, waitForInvalidMessage } from './checkout-validation.mjs';
+import { validReportId } from './checkout-report-id.mjs';
 const require=createRequire(import.meta.url);
 assert.equal(process.env.BAKATA_CI_FIXTURES,'1');
-const base=new URL('http://localhost:8080/');
-const reports=new URL('./reports/',import.meta.url);
-await mkdir(reports,{recursive:true});
-const out=name=>new URL(name,reports).pathname;
+const base=new URL(process.env.BAKATA_QA_BASE_URL||'http://localhost:8080/');
+assert.equal(base.protocol,'http:');
+assert(['localhost','127.0.0.1'].includes(base.hostname),'Local fixture only');
+assert.equal(base.pathname,'/');
+assert(!base.username&&!base.password&&!base.search&&!base.hash,'Plain local fixture URL only');
+// Opt-in while the upstream/axe interaction is investigated; never suppress the rule.
+const negative=process.env.BAKATA_QA_NEGATIVE==='1';
+const mode=negative?'negative':'positive';
+const runId=process.env.BAKATA_QA_RUN_ID||randomUUID();
+assert(validReportId(runId),'Invalid run ID');
+const runRoot=new URL(`./reports/checkout-runs/${runId}/`,import.meta.url);
+await mkdir(runRoot,{recursive:true});
+const reports=new URL(`${mode}/`,runRoot);
+await mkdir(reports); // Refuse to overwrite a prior execution with the same ID and mode.
+const out=name=>fileURLToPath(new URL(name,reports));
 const browser=await chromium.launch();
 const results=[],failures=[];
 const tags=['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa'];
+const modeOut=(name,ext)=>out(name+'-'+mode+'.'+ext);
+async function readFields(page) {
+  return page.locator('main input,main select').evaluateAll(els=>els.map(e=>({tag:e.tagName,id:e.id,name:e.name,role:e.getAttribute('role'),required:e.required,invalid:e.getAttribute('aria-invalid'),errorMessage:e.getAttribute('aria-errormessage'),describedBy:e.getAttribute('aria-describedby')})));
+}
 async function cart(page) {
   return page.evaluate(async()=>{
     const link=document.querySelector('link[rel="https://api.w.org/"]')?.href;
@@ -29,6 +48,12 @@ async function waitCart(page, predicate) {
   while(Date.now()<deadline);
   throw Error('Expected Colombian address and shipping total not reached');
 }
+async function invalidField(field, before) {
+  await field.evaluate(el=>el.blur());
+  await waitForInvalidMessage(field.page(),'email',before);
+  const id=await field.getAttribute('id');
+  assert(await field.evaluate(el=>el.labels?.length>0),'Invalid field has a label: '+id);
+}
 async function run(width) {
   const context=await browser.newContext({viewport:{width,height:900},reducedMotion:'reduce'});
   let blockedSubmissions=0;
@@ -43,7 +68,7 @@ async function run(width) {
     return route.continue();
   });
   const page=await context.newPage();
-  let phase='cart';
+  let phase='cart',negativeSnapshot;
   try {
     await page.goto(base.href,{waitUntil:'load'});
     const card=page.locator('.bk-product-card').filter({has:page.getByRole('heading',{name:'CI Featured Visible',exact:true})});
@@ -71,7 +96,30 @@ async function run(width) {
     const form=page.locator('main.bk-checkout');
     const email=form.locator('#email');
     await email.waitFor({state:'visible'});
+    let negativeAxe;
+    if(negative) {
+      phase='negative-validation';
+      const before=await referencedMessages(email);
+      await email.fill('invalid-email');
+      await invalidField(email,before);
+      assert(await email.evaluate(el=>el.validity.typeMismatch),'Invalid email rejected by native validation');
+      for(const key of ['first_name','last_name','address_1','city']) {
+        const field=form.locator('#shipping-'+key);
+        assert(await field.evaluate(el=>el.required&&el.validity.valueMissing&&el.labels?.length>0),'Empty required field has native validation and label: '+key);
+      }
+    }
+    await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+    if(negative) {
+      negativeSnapshot={url:page.url(),fields:await readFields(page)};
+      negativeAxe=await page.evaluate(tags=>window.axe.run(document,{runOnly:{type:'tag',values:tags}}),tags);
+      await writeFile(modeOut('axe-checkout-errors-'+width,'json'),JSON.stringify(negativeAxe,null,2));
+      await page.screenshot({path:modeOut('checkout-errors-'+width,'png'),fullPage:true});
+    }
     await email.fill('checkout-test@example.invalid');
+    if(negative) {
+      await email.evaluate(el=>el.blur());
+      await page.waitForFunction(()=>document.querySelector('#email')?.getAttribute('aria-invalid')==='false');
+    }
     const fields={first_name:'CI',last_name:'Fixture',address_1:'Calle de prueba 123',city:'Bogotá'};
     for(const [key,value] of Object.entries(fields)) {
       const field=form.locator('#shipping-'+key);
@@ -119,25 +167,29 @@ async function run(width) {
       const offenders=Array.from(document.querySelectorAll('main.bk-checkout *')).filter(el=>{const r=el.getBoundingClientRect();return r.width>1&&r.height>1&&r.right>width+1&&r.left>=0;}).map(el=>({tag:el.tagName,className:el.getAttribute('class'),right:Math.round(el.getBoundingClientRect().right)})).slice(0,20);
       return {width,scrollWidth,overflow:scrollWidth-width,offenders};
     });
-    await writeFile(out('layout-checkout-'+width+'.json'),JSON.stringify(geometry,null,2));
+    await writeFile(modeOut('layout-checkout-'+width,'json'),JSON.stringify(geometry,null,2));
     assert(geometry.overflow<=1,'Horizontal overflow: '+JSON.stringify(geometry));
-    await page.screenshot({path:out('checkout-'+width+'.png'),fullPage:true});
-    await page.addScriptTag({path:require.resolve('axe-core/axe.min.js')});
+    await page.screenshot({path:modeOut('checkout-'+width,'png'),fullPage:true});
     const axe=await page.evaluate(tags=>window.axe.run(document,{runOnly:{type:'tag',values:tags}}),tags);
-    await writeFile(out('axe-checkout-'+width+'.json'),JSON.stringify(axe,null,2));
+    await writeFile(modeOut('axe-checkout-'+width,'json'),JSON.stringify(axe,null,2));
     assert.equal(axe.violations.length,0,JSON.stringify(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))));
     assert.equal(blockedSubmissions,0,'No order submission attempted');
     phase='return';
     await Promise.all([page.waitForURL(u=>u.href===cartUrl.href,{waitUntil:'load'}),back.click()]);
     await page.locator('.wc-block-cart-items__row').first().waitFor({state:'visible'});
     assert.equal((await cart(page)).items[0].quantity,1);
+    if(negative) {
+      phase='negative-axe';
+      assert.equal(negativeAxe.violations.length,0,JSON.stringify(negativeAxe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))));
+    }
     results.push({width,passed:true,currency:'COP',department:'CO-DC',shippingFixture:12000,orderSubmitted:false});
   } catch(error) {
-    failures.push({width,phase,error:String(error),url:page.url(),fields:await page.locator('main input,main select').evaluateAll(els=>els.map(e=>({tag:e.tagName,id:e.id,name:e.name,role:e.getAttribute('role'),required:e.required}))).catch(()=>[])});
-    await page.screenshot({path:out('failure-checkout-'+width+'.png'),fullPage:true}).catch(()=>{});
+    const diagnostic=phase==='negative-axe'&&negativeSnapshot?negativeSnapshot:{url:page.url(),fields:await readFields(page).catch(()=>[])};
+    failures.push({width,phase,error:String(error),...diagnostic,blockedSubmissions});
+    if(phase!=='negative-axe')await page.screenshot({path:modeOut('failure-checkout-'+width,'png'),fullPage:true}).catch(()=>{});
   } finally {await context.close();}
 }
 try {for(const width of [320,768,1440])await run(width);}
-finally {await browser.close();await writeFile(out('summary-checkout.json'),JSON.stringify({results,failures},null,2));}
-console.log(JSON.stringify({results,failures}));
+finally {await browser.close();await writeFile(modeOut('summary-checkout','json'),JSON.stringify({runId,negative,results,failures},null,2));}
+console.log(JSON.stringify({runId,reportDirectory:fileURLToPath(reports),negative,results,failures}));
 if(failures.length)process.exitCode=1;

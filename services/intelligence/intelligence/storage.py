@@ -14,6 +14,7 @@ from .sources import SourceKind
 from .matching import approve_pair, compare
 from .models import Observation
 from .normalization import normalize_product
+from .references import ref
 from .scoring import evaluate
 
 APPLICATION_ID = 0x424B4931
@@ -101,12 +102,6 @@ def instant(value):
     if not isinstance(value, datetime) or value.utcoffset() is None:
         raise ValueError("Expected timezone-aware timestamp")
     return value.astimezone(timezone.utc)
-
-
-def ref(value):
-    if not isinstance(value,str) or not re.fullmatch(r"[A-Za-z0-9._-]{1,128}",value):
-        raise ValueError("Invalid review or actor reference")
-    return value
 
 
 def encode(value):

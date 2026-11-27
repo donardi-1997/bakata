@@ -6,6 +6,7 @@ const require=createRequire(import.meta.url);
 assert.equal(process.env.BAKATA_CI_FIXTURES,'1');
 const password=process.env.BAKATA_CI_ACCOUNT_PASSWORD;
 assert(password?.length>=24,'Ephemeral account credential required');
+const invalidPassword='invalid-'+password;
 const own=Number(process.env.BAKATA_CI_OWN_ORDER);
 const other=Number(process.env.BAKATA_CI_OTHER_ORDER);
 assert(Number.isInteger(own)&&own>0&&Number.isInteger(other)&&other>0&&own!==other);
@@ -50,7 +51,7 @@ async function audit(page,label) {
   assert.equal(axe.violations.length,0,JSON.stringify(axe.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))));
 }
 async function run(width) {
-  const context=await browser.newContext({viewport:{width,height:900},reducedMotion:'reduce'});
+  const context=await browser.newContext({viewport:{width,height:900},reducedMotion:'reduce',serviceWorkers:'block'});
   await context.route('**/*',route=>new URL(route.request().url()).origin===base.origin?route.continue():route.abort());
   const page=await context.newPage();
   page.setDefaultTimeout(12000);
@@ -74,6 +75,23 @@ async function run(width) {
     assert.equal(await main.locator('input[name=woocommerce-lost-password-nonce]').count(),1);
     await audit(page,'recovery-'+width);
     // Do not submit recovery or registration: no mail delivery in this suite.
+    await page.goto(account.href,{waitUntil:'load'});
+    phase='invalid-login';
+    await login.locator('#username').fill('ci-bakata-account-own');
+    await login.locator('#password').fill(invalidPassword);
+    await submit(page,login.locator('button[name=login]'));
+    await login.waitFor({state:'visible'});
+    await main.getByRole('alert').filter({hasText:/The password you entered for the username\s+ci-bakata-account-own\s+is incorrect\./}).waitFor({state:'visible'});
+    assert.equal(await nav.count(),0,'Invalid credentials do not authenticate');
+    assert.equal(await main.locator('.bk-account-shortcuts,.woocommerce-orders-table,.woocommerce-order-details').count(),0,'Invalid credentials reveal no account data');
+    const protectedUrl=new URL(account);
+    if(protectedUrl.searchParams.has('page_id'))protectedUrl.searchParams.set('view-order',String(own));
+    else protectedUrl.pathname=protectedUrl.pathname.replace(/\/?$/,'/')+'view-order/'+own+'/';
+    await page.goto(protectedUrl.href,{waitUntil:'load'});
+    await login.waitFor({state:'visible'});
+    assert.equal(await nav.count(),0,'Protected order remains inaccessible after failed login');
+    assert.equal(await main.locator('.woocommerce-order-details,.woocommerce-customer-details,mark.order-number,tr.woocommerce-table__line-item').count(),0,'No protected order details');
+    assert(!(await main.textContent()).includes('CI Account Order own'),'Protected order item absent, including hidden markup');
     await page.goto(account.href,{waitUntil:'load'});
     phase='login';
     await login.locator('#username').fill('ci-bakata-account-own');
@@ -104,6 +122,7 @@ async function run(width) {
     await page.screenshot({path:out('account-orders-'+width+'.png'),fullPage:true});
     phase='order-detail';
     const ownUrl=await follow(page,ownLink);
+    assert.equal(ownUrl.href,protectedUrl.href,'Previously tested protected URL is the native own order endpoint');
     const details=content.locator('.woocommerce-order-details');
     await details.waitFor({state:'visible'});
     assert.equal((await content.locator('mark.order-number').innerText()).trim(),String(own),'Own order ID in detail');
@@ -178,12 +197,12 @@ async function run(width) {
     await login.waitFor({state:'visible'});
     assert(!(await main.textContent()).includes('CI Account Order own'),'Logged-out order must not leak, even in hidden markup');
     assert.equal(await main.locator('.woocommerce-order-details').count(),0);
-    results.push({width,passed:true,ownOrder:true,foreignOrderDenied:true,profileSaved:true,addressSaved:true,loggedOut:true});
+    results.push({width,passed:true,invalidLoginDenied:true,ownOrder:true,foreignOrderDenied:true,profileSaved:true,addressSaved:true,loggedOut:true});
   } catch(error) {
     // No request bodies, form values, credentials or order URLs with nonces in logs.
-    failures.push({width,phase,error:String(error).replaceAll(password,'[redacted]').slice(0,1600),path:new URL(page.url()).pathname,orderLayout:await page.locator('main.bk-account .woocommerce-orders-table__cell-order-number, main.bk-account .woocommerce-order-details').evaluateAll(nodes=>nodes.map(el=>({tag:el.tagName,className:el.className,display:getComputedStyle(el).display,visible:el.getBoundingClientRect().height>0}))).catch(()=>[])});
+    failures.push({width,phase,error:String(error).replaceAll(invalidPassword,'[redacted]').replaceAll(password,'[redacted]').slice(0,1600),path:new URL(page.url()).pathname,orderLayout:await page.locator('main.bk-account .woocommerce-orders-table__cell-order-number, main.bk-account .woocommerce-order-details').evaluateAll(nodes=>nodes.map(el=>({tag:el.tagName,className:el.className,display:getComputedStyle(el).display,visible:el.getBoundingClientRect().height>0}))).catch(()=>[])});
     // Avoid capturing partially filled authentication forms.
-    if(!['guest','login','recovery'].includes(phase))await page.screenshot({path:out('failure-account-'+width+'.png'),fullPage:true}).catch(()=>{});
+    if(!['guest','invalid-login','login','recovery'].includes(phase))await page.screenshot({path:out('failure-account-'+width+'.png'),fullPage:true}).catch(()=>{});
   } finally {await context.close();}
 }
 try {for(const width of [320,768,1440])await run(width);}

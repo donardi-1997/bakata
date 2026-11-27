@@ -59,6 +59,8 @@ jobs:
         run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-pricing-preview.php
       - name: Inventory preview — isolated reconciliation tests
         run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-inventory-preview.php
+      - name: Inventory import — offline integration tests
+        run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-inventory-import-offline.php
       - name: Order preview — isolated eligibility and grouping tests
         run: docker run --rm -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-order-preview.php
       - name: Fulfillment preview — isolated state machine and group tests
@@ -76,6 +78,8 @@ jobs:
           docker compose config --services | python3 -c 'import sys; assert not {"fixture","scheduler","intelligence"}.intersection(sys.stdin.read().splitlines())'
       - name: Validate design system tokens and assets
         run: python3 scripts/check_design_system.py
+      - name: Validate header disclosure selectors
+        run: node qa/header-css-test.mjs
       - name: Bootstrap local store
         run: bash scripts/bootstrap.sh
       - name: Smoke test

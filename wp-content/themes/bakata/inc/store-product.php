@@ -3,6 +3,28 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
+/** Mark native single-product forms for a safe redirect after successful POST. */
+add_action('woocommerce_before_add_to_cart_button', static function (): void {
+    if (function_exists('is_product') && is_product()) {
+        echo '<input type="hidden" name="bakata_product_redirect" value="1">';
+    }
+});
+
+add_filter('woocommerce_add_to_cart_redirect', static function ($url, $product) {
+    if ($url || ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST'
+        || ($_POST['bakata_product_redirect'] ?? null) !== '1'
+        || !$product instanceof WC_Product
+        || !in_array($product->get_type(), ['simple', 'variable'], true)) {
+        return $url;
+    }
+    // Preserve WooCommerce's configured cart redirect; otherwise return to
+    // the product, using only the server-resolved product ID as destination.
+    if ('yes' === get_option('woocommerce_cart_redirect_after_add')) {
+        return wc_get_cart_url();
+    }
+    return get_permalink($product->get_id()) ?: $url;
+}, 10, 2);
+
 /** Add only approved, published service information to the native summary. */
 add_action('woocommerce_single_product_summary', static function (): void {
     if (!function_exists('is_product') || !is_product() || post_password_required()) {

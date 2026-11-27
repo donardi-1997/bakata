@@ -61,22 +61,22 @@ function bakata_render_store_header(): string {
           <summary class="bk-header-control" aria-label="<?php esc_attr_e('Menú de navegación', 'bakata'); ?>"><?php echo bakata_header_icon('menu'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></summary>
           <nav aria-label="<?php esc_attr_e('Navegación móvil', 'bakata'); ?>" class="bk-header-mobile-nav">
             <?php foreach ($links as $url => $label) : ?>
-              <a href="<?php echo esc_url($url); ?>"><?php echo esc_html($label); ?></a>
+              <a tabindex="0" href="<?php echo esc_url($url); ?>"><?php echo esc_html($label); ?></a>
             <?php endforeach; ?>
             <?php foreach ($category_links as $url => $category) : ?>
               <?php if ($category['children']) : ?>
                 <details class="bk-mobile-category">
                   <summary><?php echo esc_html($category['name']); ?></summary>
-                  <a href="<?php echo esc_url($url); ?>"><?php echo esc_html(sprintf(__('Ver todo: %s', 'bakata'), $category['name'])); ?></a>
+                  <a tabindex="0" href="<?php echo esc_url($url); ?>"><?php echo esc_html(sprintf(__('Ver todo: %s', 'bakata'), $category['name'])); ?></a>
                   <?php foreach ($category['children'] as $child_url => $child_name) : ?>
-                    <a href="<?php echo esc_url($child_url); ?>"><?php echo esc_html($child_name); ?></a>
+                    <a tabindex="0" href="<?php echo esc_url($child_url); ?>"><?php echo esc_html($child_name); ?></a>
                   <?php endforeach; ?>
                 </details>
               <?php else : ?>
-                <a href="<?php echo esc_url($url); ?>"><?php echo esc_html($category['name']); ?></a>
+                <a tabindex="0" href="<?php echo esc_url($url); ?>"><?php echo esc_html($category['name']); ?></a>
               <?php endif; ?>
             <?php endforeach; ?>
-            <?php if ($account) : ?><a href="<?php echo esc_url($account); ?>"><?php esc_html_e('Mi cuenta', 'bakata'); ?></a><?php endif; ?>
+            <?php if ($account) : ?><a tabindex="0" href="<?php echo esc_url($account); ?>"><?php esc_html_e('Mi cuenta', 'bakata'); ?></a><?php endif; ?>
           </nav>
         </details>
         <a class="bk-header-brand" href="<?php echo esc_url($home); ?>">

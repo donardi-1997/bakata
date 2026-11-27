@@ -1,17 +1,24 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { chromium } from 'playwright';
+import { fileURLToPath } from 'node:url';
+import { chromium, webkit } from 'playwright';
 
 const require = createRequire(import.meta.url);
 const base = new URL('http://localhost:8080/');
 const mode = process.argv[2] ?? 'populated';
 assert(['empty', 'populated'].includes(mode));
 assert.equal(process.env.BAKATA_CI_FIXTURES, '1', 'Use only disposable local QA data');
-const reportDir = new URL('./reports/', import.meta.url);
+const engine = process.env.BAKATA_QA_BROWSER ?? 'chromium';
+assert(['chromium', 'webkit'].includes(engine), 'Unsupported QA browser');
+const layoutOnly = process.env.BAKATA_QA_LAYOUT_ONLY ?? '0';
+assert(['0', '1'].includes(layoutOnly), 'Invalid layout-only setting');
+const scope = layoutOnly === '1' ? 'layout' : 'full';
+const reportDir = new URL(engine === 'chromium' && scope === 'full'
+  ? './reports/' : `./reports/${engine}-${scope}/`, import.meta.url);
 await mkdir(reportDir, { recursive: true });
-const output = (name) => new URL(name, reportDir).pathname;
-const browser = await chromium.launch({ headless: true });
+const output = (name) => fileURLToPath(new URL(name, reportDir));
+const browser = await {chromium, webkit}[engine].launch({ headless: true });
 const widths = mode === 'empty' ? [375, 1440] : [320, 375, 576, 768, 1024, 1440, 1920];
 const results = [];
 const failures = [];
@@ -25,6 +32,31 @@ async function openHome(page) {
 async function visible(locator, message) {
   await locator.waitFor({ state: 'visible', timeout: 10000 });
   assert(await locator.isVisible(), message);
+}
+async function checkOpenHeaderTargets(page) {
+  const search = page.locator('.bk-header-search');
+  const actions = page.locator('.bk-header-actions');
+  const order = await page.evaluate(() => {
+    const box = selector => document.querySelector(selector).getBoundingClientRect();
+    return {navBottom: box('.bk-header-mobile-nav').bottom, searchTop: box('.bk-header-search').top,
+      searchBottom: box('.bk-header-search').bottom, actionsTop: box('.bk-header-actions').top};
+  });
+  assert(order.searchTop >= order.navBottom && order.actionsTop >= order.searchBottom,
+    'Open header overlaps or visual order differs from DOM: ' + JSON.stringify(order));
+  const controls = page.locator('.bk-header-search input[type="search"], .bk-header-search button[type="submit"], .bk-header-actions a');
+  assert.equal(await search.locator('input[type="search"]').count(), 1);
+  assert.equal(await search.locator('button[type="submit"]').count(), 1);
+  assert(await actions.locator('a').count() > 0, 'Header actions missing');
+  for (const control of await controls.all()) {
+    await control.scrollIntoViewIfNeeded();
+    const result = await control.evaluate(el => {
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return {width:r.width, height:r.height, hit:top === el || el.contains(top)};
+    });
+    assert(result.width >= 44 && result.height >= 44 && result.hit,
+      'Header control too small or covered: ' + JSON.stringify(result));
+  }
 }
 async function localContext(width) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', locale: 'es-CO' });
@@ -110,7 +142,7 @@ async function checkLayout(width) {
     assert(layout.scrollWidth <= layout.viewport + 1, 'Horizontal overflow: ' + JSON.stringify(layout));
     assert(layout.fonts.every(f => f.loaded), 'Local fonts did not load: ' + JSON.stringify(layout.fonts));
     assert(layout.imageLoaded, 'Hero image did not load');
-    const menu = page.locator('.bk-header-menu summary');
+    const menu = page.locator('.bk-header-menu > summary');
     if (width < 1024) {
       await visible(menu, 'Mobile menu');
       // Tab navigation must actually reach the disclosure.
@@ -123,8 +155,66 @@ async function checkLayout(width) {
       await page.keyboard.press('Enter');
       await visible(page.locator('.bk-header-mobile-nav'), 'Open mobile navigation');
       assert(await menu.evaluate(el => getComputedStyle(el).outlineStyle !== 'none'), 'Menu focus indicator missing');
-      await page.keyboard.press('Enter');
-      assert(!(await page.locator('.bk-header-menu').evaluate(el => el.open)), 'Disclosure did not close');
+      if (mode === 'populated') {
+        const nested = page.locator('.bk-mobile-category').filter({has: page.getByText('CI Category Alpha', {exact:true})});
+        const nestedTrigger = nested.locator('summary');
+        assert.equal(await nested.count(), 1, 'Real fixture category disclosure missing');
+        assert.notEqual(await nestedTrigger.evaluate(el => getComputedStyle(el).listStyleType), 'none', 'Nested list marker hidden');
+        assert.notEqual(await nestedTrigger.evaluate(el => getComputedStyle(el, '::-webkit-details-marker').display), 'none', 'Nested WebKit marker hidden');
+        let reachedNested = false;
+        for (let i = 0; i < 20; i++) {
+          await page.keyboard.press('Tab');
+          if (await nestedTrigger.evaluate(el => el === document.activeElement)) { reachedNested = true; break; }
+        }
+        assert(reachedNested, 'Nested disclosure not reachable by Tab');
+        assert(await nestedTrigger.evaluate(el => {
+          const style = getComputedStyle(el);
+          return style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0;
+        }), 'Nested disclosure focus indicator missing');
+        await page.keyboard.press('Enter');
+        assert(await nested.evaluate(el => el.open), 'Nested disclosure did not open with keyboard');
+        await page.keyboard.press('Enter');
+        assert(!(await nested.evaluate(el => el.open)), 'Nested disclosure did not close with keyboard');
+        let reachedSearch = false;
+        for (let i = 0; i < 150; i++) {
+          await page.keyboard.press('Tab');
+          assert(!(await nested.evaluate(el => el.contains(document.activeElement))), 'Closed disclosure links remain in Tab order');
+          if (await page.locator('.bk-header-search input[type="search"]').evaluate(el => el === document.activeElement)) {
+            reachedSearch = true;
+            break;
+          }
+        }
+        assert(reachedSearch, 'Tab sequence after closed disclosure did not reach search');
+        await nestedTrigger.focus();
+        await checkOpenHeaderTargets(page);
+        if (width === 375) {
+          await page.setViewportSize({width, height:480});
+          await checkOpenHeaderTargets(page);
+          await page.setViewportSize({width, height:900});
+        }
+        await page.keyboard.press('Enter');
+        assert(await nested.evaluate(el => el.open), 'Nested disclosure did not reopen with keyboard');
+        await checkOpenHeaderTargets(page);
+        if (width === 375) {
+          await page.setViewportSize({width, height:480});
+          await checkOpenHeaderTargets(page);
+          await page.setViewportSize({width, height:900});
+        }
+        await page.addScriptTag({ path: require.resolve('axe-core/axe.min.js') });
+        const nestedAxe = await page.evaluate(async tags => window.axe.run(document, {runOnly:{type:'tag',values:tags}}), tags);
+        assert.equal(nestedAxe.violations.length, 0, 'Open navigation axe violations: ' + JSON.stringify(nestedAxe.violations.map(v => v.id)));
+        await page.keyboard.press('Tab'); // Parent category link.
+        const childLink = nested.getByRole('link', {name:'CI Category Child', exact:true});
+        await page.keyboard.press('Tab');
+        assert(await childLink.evaluate(el => el === document.activeElement), 'Child link not reachable by Tab');
+        const childUrl = new URL(await childLink.getAttribute('href'), base);
+        assert.equal(childUrl.origin, base.origin);
+        await Promise.all([page.waitForURL(childUrl.href), page.keyboard.press('Enter')]);
+        await openHome(page);
+      } else {
+        await page.keyboard.press('Enter');
+        assert(!(await page.locator('.bk-header-menu').evaluate(el => el.open)), 'Disclosure did not close');
+      }
     } else {
       await visible(page.locator('.bk-header-desktop-nav'), 'Desktop navigation');
       assert(!(await menu.isVisible()), 'Mobile navigation visible on desktop');
@@ -260,10 +350,10 @@ async function checkShopping() {
 
 try {
   for (const width of widths) await checkLayout(width);
-  if (mode === 'populated') await checkShopping();
+  if (mode === 'populated' && layoutOnly === '0') await checkShopping();
 } finally {
   await browser.close();
-  await writeFile(output('summary-' + mode + '.json'), JSON.stringify({mode, results, failures}, null, 2));
+  await writeFile(output('summary-' + mode + '.json'), JSON.stringify({mode, engine, scope, results, failures}, null, 2));
 }
 for (const result of results) console.log(JSON.stringify(result));
 if (failures.length) {

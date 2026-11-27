@@ -59,6 +59,7 @@ try {
     draft_check($stored->get_manage_stock() && $stored->get_stock_quantity()===0 && !$stored->is_in_stock() && !$stored->backorders_allowed(), 'zero sellable stock');
     draft_check(!$stored->is_purchasable(), 'non-purchasable');
     draft_check($stored->get_meta('_bakata_source_stock')==='5', 'supplier stock separate');
+    draft_check($stored->get_meta('_bakata_observed_at')===$now->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.uP'), 'fractional observation stored');
     draft_check($stored->get_meta('_bakata_candidate_price_minor')===(string)(57000*$scale), 'candidate price private metadata');
     $inventory = new WooInventoryPreview();
     $stockPolicy = new InventoryPolicy(3600,1,10);
@@ -74,10 +75,17 @@ try {
     wp_set_current_user((int)$admins[0]);
     $afterPreview = wc_get_product($id);
     draft_check($afterPreview->get_stock_quantity()===0 && $afterPreview->get_meta('_bakata_source_stock')==='5'
-        && $afterPreview->get_meta('_bakata_observed_at')===$now->format(DATE_ATOM)
+        && $afterPreview->get_meta('_bakata_observed_at')===$now->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.uP')
         && $afterPreview->get_price()==='' && $afterPreview->get_status()==='draft', 'preview does not mutate stored stock, observation, price or status');
+    $stored->update_meta_data('_bakata_observed_at', $now->format(DATE_ATOM));
+    $stored->save();
+    draft_rejects(fn()=>$inventory->inspect($id,$next,$stockPolicy,0,$later),RuntimeException::class,'manual review');
+    draft_rejects(fn()=>$inventory->inspect($id,null,$stockPolicy,0,$later),RuntimeException::class,'manual review');
+    $stored->update_meta_data('_bakata_observed_at', $now->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.uP'));
+    $stored->save();
 
-    draft_check($importer->create($source(at:$now->modify('-1 minute')),$cost,$policy,3600)===$id, 'sequential replay returns same ID');
+    draft_check($importer->create($source(),$cost,$policy,3600)===$id, 'sequential replay returns same ID');
+    draft_rejects(fn()=>$importer->create($source(at:$now->modify('-1 minute')),$cost,$policy,3600),RuntimeException::class,'manual review');
     draft_check(count(wc_get_products(['sku'=>$source()->proposedSku(),'status'=>'draft','limit'=>-1,'return'=>'ids']))===1, 'one draft');
     draft_check(count(wc_get_products(['sku'=>$source()->proposedSku(),'status'=>'publish','limit'=>-1,'return'=>'ids']))===0, 'not published');
     draft_rejects(fn()=>$importer->create($source(stock:7),$cost,$policy,3600),RuntimeException::class,'conflicts');
@@ -99,5 +107,5 @@ try {
     wp_set_current_user($previous);
 }
 $checks = $GLOBALS['bakata_draft_ci_checks'];
-if ($checks !== 32) { throw new RuntimeException('Unexpected draft/inventory check count: ' . $checks); }
+if ($checks !== 36) { throw new RuntimeException('Unexpected draft/inventory check count: ' . $checks); }
 echo "Draft import and mapped inventory: {$checks} checks passed.\n";
