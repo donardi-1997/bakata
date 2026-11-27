@@ -36,6 +36,27 @@
       "Type": "String",
       "Default": "",
       "AllowedPattern": "^$|^sha256:[0-9a-f]{64}$"
+    },
+    "EnableProxyFixture": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Description": "Private synthetic proxy network only; no tasks or Internet route"
+    },
+    "S3ManagedPrefixList": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^pl-[0-9a-f]{8,17}$",
+      "Description": "Reviewed AWS regional service managed prefix list ID"
+    },
+    "DynamoManagedPrefixList": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^pl-[0-9a-f]{8,17}$",
+      "Description": "Reviewed AWS regional service managed prefix list ID"
     }
   },
   "Rules": {
@@ -119,6 +140,71 @@
           "AssertDescription": "Reviewed coordinator digest required."
         }
       ]
+    },
+    "ProxyRequiresPersistence": {
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "EnableProxyFixture"
+          },
+          "true"
+        ]
+      },
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::And": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "EnableFixtureNetwork"
+                  },
+                  "true"
+                ]
+              },
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "EnableFixturePersistence"
+                  },
+                  "true"
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Persistent private fixture network required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "S3ManagedPrefixList"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Explicit reviewed S3ManagedPrefixList required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "DynamoManagedPrefixList"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Explicit reviewed DynamoManagedPrefixList required"
+        }
+      ]
     }
   },
   "Conditions": {
@@ -139,6 +225,21 @@
           "Fn::Equals": [
             {
               "Ref": "EnableFixturePersistence"
+            },
+            "true"
+          ]
+        }
+      ]
+    },
+    "ProxyFixtureEnabled": {
+      "Fn::And": [
+        {
+          "Condition": "PersistentFixtureEnabled"
+        },
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "EnableProxyFixture"
             },
             "true"
           ]
@@ -461,6 +562,17 @@
         "RouteTableIds": [
           {
             "Ref": "ResearchRoutes"
+          },
+          {
+            "Fn::If": [
+              "ProxyFixtureEnabled",
+              {
+                "Ref": "ProxyFixtureRoutes"
+              },
+              {
+                "Ref": "AWS::NoValue"
+              }
+            ]
           }
         ],
         "PolicyDocument": {
@@ -947,6 +1059,17 @@
         "RouteTableIds": [
           {
             "Ref": "ResearchRoutes"
+          },
+          {
+            "Fn::If": [
+              "ProxyFixtureEnabled",
+              {
+                "Ref": "ProxyFixtureRoutes"
+              },
+              {
+                "Ref": "AWS::NoValue"
+              }
+            ]
           }
         ],
         "PolicyDocument": {
@@ -1220,6 +1343,190 @@
           ]
         }
       }
+    },
+    "ProxyFixtureWorkerSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Condition": "ProxyFixtureEnabled",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ResearchVpc"
+        },
+        "CidrBlock": "10.211.0.64/26",
+        "AvailabilityZone": {
+          "Fn::GetAtt": [
+            "ResearchSubnet",
+            "AvailabilityZone"
+          ]
+        },
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "ProxyFixtureWorkerSubnetAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Condition": "ProxyFixtureEnabled",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "ProxyFixtureWorkerSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "ProxyFixtureRoutes"
+        }
+      }
+    },
+    "ProxyFixtureSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Condition": "ProxyFixtureEnabled",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ResearchVpc"
+        },
+        "CidrBlock": "10.211.0.128/26",
+        "AvailabilityZone": {
+          "Fn::GetAtt": [
+            "ResearchSubnet",
+            "AvailabilityZone"
+          ]
+        },
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "ProxyFixtureSubnetAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Condition": "ProxyFixtureEnabled",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "ProxyFixtureSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "ProxyFixtureRoutes"
+        }
+      }
+    },
+    "ProxyFixtureRoutes": {
+      "Type": "AWS::EC2::RouteTable",
+      "Condition": "ProxyFixtureEnabled",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ResearchVpc"
+        }
+      }
+    },
+    "ProxyFixtureSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Condition": "ProxyFixtureEnabled",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ResearchVpc"
+        },
+        "GroupDescription": "Synthetic proxy: AWS image and logs endpoints only; no Internet",
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "DestinationSecurityGroupId": {
+              "Ref": "EndpointSecurityGroup"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "DestinationPrefixListId": {
+              "Ref": "S3ManagedPrefixList"
+            }
+          }
+        ]
+      }
+    },
+    "ProxyFixtureWorkerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Condition": "ProxyFixtureEnabled",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ResearchVpc"
+        },
+        "GroupDescription": "Worker: approved AWS endpoints and authenticated fixture proxy only",
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "DestinationSecurityGroupId": {
+              "Ref": "EndpointSecurityGroup"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "DestinationPrefixListId": {
+              "Ref": "S3ManagedPrefixList"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "DestinationPrefixListId": {
+              "Ref": "DynamoManagedPrefixList"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 8443,
+            "ToPort": 8443,
+            "DestinationSecurityGroupId": {
+              "Ref": "ProxyFixtureSecurityGroup"
+            }
+          }
+        ]
+      }
+    },
+    "ProxyFixtureIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "ProxyFixtureEnabled",
+      "Properties": {
+        "GroupId": {
+          "Ref": "ProxyFixtureSecurityGroup"
+        },
+        "SourceSecurityGroupId": {
+          "Ref": "ProxyFixtureWorkerSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 8443,
+        "ToPort": 8443
+      }
+    },
+    "ProxyFixtureEndpointIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "ProxyFixtureEnabled",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EndpointSecurityGroup"
+        },
+        "SourceSecurityGroupId": {
+          "Ref": "ProxyFixtureSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 443,
+        "ToPort": 443
+      }
+    },
+    "ProxyFixtureWorkerEndpointIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "ProxyFixtureEnabled",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EndpointSecurityGroup"
+        },
+        "SourceSecurityGroupId": {
+          "Ref": "ProxyFixtureWorkerSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 443,
+        "ToPort": 443
+      }
     }
   },
   "Outputs": {
@@ -1284,6 +1591,30 @@
       "Condition": "PersistentFixtureEnabled",
       "Value": {
         "Ref": "PersistentFixtureTask"
+      }
+    },
+    "ProxyFixtureWorkerSubnet": {
+      "Condition": "ProxyFixtureEnabled",
+      "Value": {
+        "Ref": "ProxyFixtureWorkerSubnet"
+      }
+    },
+    "ProxyFixtureSubnet": {
+      "Condition": "ProxyFixtureEnabled",
+      "Value": {
+        "Ref": "ProxyFixtureSubnet"
+      }
+    },
+    "ProxyFixtureWorkerSecurityGroup": {
+      "Condition": "ProxyFixtureEnabled",
+      "Value": {
+        "Ref": "ProxyFixtureWorkerSecurityGroup"
+      }
+    },
+    "ProxyFixtureSecurityGroup": {
+      "Condition": "ProxyFixtureEnabled",
+      "Value": {
+        "Ref": "ProxyFixtureSecurityGroup"
       }
     }
   }

@@ -1,7 +1,7 @@
 """Bounded CONNECT relay for the isolated research pilot.
 
-Not deployed or connected to WordPress. No TLS termination, credentials or
-provider HTTP implementation. Run only behind a dedicated private SG.
+Not deployed or connected to WordPress. Runtime is synthetic-only and requires
+mutual TLS on the proxy transport. No supplier TLS interception or credentials.
 """
 import asyncio
 import ipaddress
@@ -152,17 +152,43 @@ class PilotProxy:
 
 
 async def main():
-    if os.environ.get("BAKATA_RESEARCH_PROXY_ENABLED")!="1":
-        raise ValueError("Proxy disabled")
-    # Deployment must explicitly provide a private bind address and SG.
+    # Deliberately no runtime path to the real provider in this stage.
+    if os.environ.get("BAKATA_RESEARCH_PROXY_ENABLED")!="1" or os.environ.get("BAKATA_RESEARCH_PROXY_FIXTURE")!="1":
+        raise ValueError("Synthetic proxy disabled")
+    from .research_proxy_auth import authenticated_handler, server_context
     host=os.environ["BAKATA_RESEARCH_PROXY_BIND"]
     ip=ipaddress.ip_address(host)
     if ip.version!=4 or not any(ip in ipaddress.ip_network(net) for net in ("10.0.0.0/8","172.16.0.0/12","192.168.0.0/16")):
         raise ValueError("Private IPv4 bind required")
-    proxy=PilotProxy(until=int(os.environ["BAKATA_RESEARCH_UNTIL"]))
-    server=await asyncio.start_server(proxy.handle,host,8443,limit=HEADER_LIMIT,backlog=2)
-    async with server:
-        await asyncio.sleep(max(0,proxy.until-time.time()))
+    ctx=server_context(cert=os.environ["BAKATA_PROXY_CERT_FILE"],
+        key=os.environ["BAKATA_PROXY_KEY_FILE"],ca=os.environ["BAKATA_PROXY_CA_FILE"])
+    until=int(os.environ["BAKATA_RESEARCH_UNTIL"])
+
+    async def synthetic_response(reader,writer):
+        try:
+            data=await asyncio.wait_for(reader.read(1024),2)
+            if data==b"bakata-fixture-probe":
+                writer.write(b"bakata-fixture-ok")
+                await writer.drain()
+        finally:
+            await close(writer)
+
+    async def fixture_resolve():
+        # Sentinel address is validated by the policy but never contacted.
+        return ["8.8.8.8"]
+
+    async with await asyncio.start_server(synthetic_response,"127.0.0.1",0) as local:
+        port=local.sockets[0].getsockname()[1]
+        async def fixture_dial(address):
+            if address!="8.8.8.8":
+                raise ValueError("Invalid fixture sentinel")
+            return await asyncio.open_connection("127.0.0.1",port)
+        proxy=PilotProxy(until=until,resolve=fixture_resolve,dial=fixture_dial)
+        handler=authenticated_handler(proxy,os.environ["BAKATA_PROXY_CLIENT_SHA256"])
+        server=await asyncio.start_server(handler,host,8443,limit=HEADER_LIMIT,backlog=2,
+            ssl=ctx,ssl_handshake_timeout=3,ssl_shutdown_timeout=1)
+        async with server:
+            await asyncio.sleep(max(0,proxy.until-time.time()))
 
 
 if __name__=="__main__":
