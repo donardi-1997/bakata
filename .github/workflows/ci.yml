@@ -216,6 +216,13 @@ jobs:
           php -l scripts/test-intelligence-draft-ci.php
           export BAKATA_CI_INTELLIGENCE_SNAPSHOT="$(cat /tmp/bakata-job-result.json)"
           docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 -e BAKATA_CI_INTELLIGENCE_SNAPSHOT cli wp eval "$(tail -n +2 scripts/test-intelligence-draft-ci.php)"
+      - name: Intelligence Dropify — isolated read-only WooCommerce reconciliation
+        env:
+          BAKATA_CI_FIXTURES: '1'
+        run: |
+          php -l scripts/test-intelligence-dropify-ci.php
+          export BAKATA_CI_INTELLIGENCE_SNAPSHOT="$(cat /tmp/bakata-job-result.json)"
+          docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 -e BAKATA_CI_INTELLIGENCE_SNAPSHOT cli wp eval "$(tail -n +2 scripts/test-intelligence-dropify-ci.php)"
       - name: Order preview — isolated WooCommerce CRUD tests
         env:
           BAKATA_CI_FIXTURES: '1'
