@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from .storage import instant, ref
-from .scoring import RUBRIC_VERSION
+from .scoring import RUBRIC_VERSION, WEIGHTS
 
 WINDOW = timedelta(days=30)
 MATURITY = timedelta(days=14)
@@ -21,6 +21,15 @@ def number(value,lower,upper):
 
 def rounded(value):
     return str(value.quantize(Decimal("0.01"),rounding=ROUND_HALF_UP))
+
+
+def concordance(samples):
+    positives=[s for s,ok in samples if ok]
+    negatives=[s for s,ok in samples if not ok]
+    if not positives or not negatives:
+        return None
+    twice=sum(2 if p>n else 1 if p==n else 0 for p in positives for n in negatives)
+    return rounded(Decimal(twice)*100/(2*len(positives)*len(negatives)))
 
 
 class Calibration:
@@ -117,6 +126,8 @@ class Calibration:
         enrolled=0
         samples=[]
         errors=[]
+        criteria={key:[] for key in WEIGHTS}
+        total_orders=total_returns=0
         bands=[{"range":label,"observed":0,"successes":0} for label in ("0–<25","25–<50","50–<75","75–100")]
         for group,eid,sha,enrolled_at,recorded,orders,returns,gross,contribution in rows:
             if datetime.fromisoformat(enrolled_at)>as_of:
@@ -131,6 +142,10 @@ class Calibration:
             score=Decimal(result["total"])
             success=orders>=minimum and contribution>0
             samples.append((score,success))
+            total_orders+=orders
+            total_returns+=returns
+            for component in result['components']:
+                criteria[component['criterion']].append((Decimal(component['score']),success))
             band=bands[min(3,int(score)//25)]
             band["observed"]+=1
             band["successes"]+=int(success)
@@ -142,10 +157,7 @@ class Calibration:
         negatives=[s for s,ok in samples if not ok]
         ready=(as_of>=end+MATURITY and observed==enrolled and observed>=MIN_SAMPLE
                and min(len(positives),len(negatives))>=MIN_CLASS)
-        concordance=None
-        if ready:
-            twice=sum(2 if p>n else 1 if p==n else 0 for p in positives for n in negatives)
-            concordance=rounded(Decimal(twice)*100/(2*len(positives)*len(negatives)))
+        rank=concordance(samples) if ready else None
         for band in bands:
             band["success_rate_pct"]=(rounded(Decimal(band["successes"])*100/band["observed"])
                                      if ready and band["observed"]>=MIN_CLASS else None)
@@ -155,6 +167,9 @@ class Calibration:
                 "successes":len(positives),"failures":len(negatives),
                 "coverage_pct":rounded(Decimal(observed)*100/enrolled) if enrolled else None,
                 "status":"descriptive-review-ready" if ready else "insufficient-evidence",
-                "rank_concordance_pct":concordance,"bands":bands,
+                "rank_concordance_pct":rank,"bands":bands,
+                "criterion_concordance_pct":{key:concordance(values) if ready else None for key,values in criteria.items()},
+                "fulfilled_orders_observed":total_orders,"returned_orders_observed":total_returns,
+                "observed_return_rate_pct":rounded(Decimal(total_returns)*100/total_orders) if ready and total_orders else None,
                 "margin_error_sample":len(errors),
                 "mean_absolute_margin_error_pp":rounded(sum(errors)/len(errors)) if ready and len(errors)>=MIN_SAMPLE else None}
