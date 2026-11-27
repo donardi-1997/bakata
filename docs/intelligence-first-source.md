@@ -50,12 +50,13 @@ umask 077
 python3 -m intelligence.pilot execute \
   --manifest /ruta/privada/pilot.json \
   --ledger /ruta/privada/pilot.sqlite \
+  --archive /ruta/privada/commercial.sqlite \
   --confirm DIGEST_SHA256_DEL_PLAN_APROBADO > /ruta/privada/result.json
 ```
 
 Una única GET HTTPS, IPv4 revisada debe coincidir con la dirección pública seleccionada por DNS, conexión numérica con SNI y verificación TLS del hostname. Sin redirects, reintentos, cookies, proxy ambiental ni paginación. Deadline de proceso Linux 30 s, timeout de socket 10 s, respuesta JSON sin compresión hasta 512 KiB y máximo 100 filas según contrato Store API de INT-03. Un 429/403, cambio de DNS, error de certificado, JSON inválido, caducidad o interrupción exige revisión manual. No se siguen enlaces. Solo se exportan observaciones normalizadas y evidencia SHA-256 de la captura; no se emite el cuerpo original. Los precios de rangos siguen desconocidos.
 
-El ledger local reserva de forma persistente antes del intento, por hostname, con estado reserved, succeeded o failed-review. Una reserva existente impide nuevas solicitudes por ese host en el mismo ledger incluso si el manifiesto cambia. No borrar/recrear el ledger para reintentar; no coordina hosts diferentes, otras máquinas o herramientas. Sin API ni scheduler, no es un limitador distribuido. El resultado JSON se conserva por el operador; si falla la salida después de confirmar recibo, se revisa manualmente. El hash sin cuerpo original no permite reconstruir la evidencia; almacenamiento comercial completo es INT-12.
+El ledger local reserva de forma persistente antes del intento, por hostname, con estado reserved, succeeded o failed-review. Una reserva existente impide nuevas solicitudes por ese host en el mismo ledger incluso si el manifiesto cambia. No borrar/recrear el ledger para reintentar; no coordina hosts diferentes, otras máquinas o herramientas. Sin API ni scheduler, no es un limitador distribuido. Desde INT-12 la CLI exige una base comercial distinta del ledger. Persiste captura normalizada, observaciones y digest antes de confirmar recibo; no conserva el cuerpo original. Si falla la salida después de confirmar recibo, recuperar desde el archivo comercial. Una interrupción entre ambas bases exige conciliación manual, no repetir la solicitud.
 
 ## Pruebas y estado
 
