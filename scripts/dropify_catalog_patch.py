@@ -59,10 +59,14 @@ def patch_catalog(name, source):
         method = one(method, "        $products = [];", """        if (!defined('BAKATA_DROPIFY_CATALOG_READ') || BAKATA_DROPIFY_CATALOG_READ !== true
             || !in_array(wp_get_environment_type(), array('development','staging'), true)
             || !current_user_can('manage_options')
-            || ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST'
-            || !isset($_POST['bk_catalog_read']) || !isset($_POST['_wpnonce'])
-            || !is_string($_POST['_wpnonce'])
-            || !wp_verify_nonce(wp_unslash($_POST['_wpnonce']), 'bk_catalog_read')
+            || !((defined('WP_CLI') && WP_CLI
+                && function_exists('bakata_catalog_batch_cli_authorized')
+                && bakata_catalog_batch_cli_authorized($store_filter, $current_page, $search))
+                || ((!defined('WP_CLI') || !WP_CLI)
+                    && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+                    && isset($_POST['bk_catalog_read'], $_POST['_wpnonce'])
+                    && is_string($_POST['_wpnonce'])
+                    && wp_verify_nonce(wp_unslash($_POST['_wpnonce']), 'bk_catalog_read')))
             || !is_int($per_page) || $per_page < 1 || $per_page > 20
             || !is_int($current_page) || $current_page < 0 || $current_page > 1980
             || !is_string($search) || strlen($search) > 120

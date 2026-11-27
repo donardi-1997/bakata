@@ -153,3 +153,50 @@ function bakata_catalog_render($list)
     }
     echo '</div>';
 }
+
+
+// Only WP-CLI on an explicitly approved isolated staging installation.
+function bakata_catalog_batch_scope($run,$store,$page)
+{
+    if (!defined('WP_CLI') || !WP_CLI || wp_get_environment_type() !== 'staging'
+        || !current_user_can('manage_options')
+        || !defined('BAKATA_DROPIFY_BATCH_ENABLED') || BAKATA_DROPIFY_BATCH_ENABLED !== true
+        || !defined('BAKATA_DROPIFY_BATCH_HOST') || !is_string(BAKATA_DROPIFY_BATCH_HOST)
+        || !defined('BAKATA_DROPIFY_BATCH_RUN') || BAKATA_DROPIFY_BATCH_RUN !== $run
+        || !is_string($run) || !preg_match('/\A[A-Za-z0-9_-]{1,64}\z/D',$run)
+        || !defined('BAKATA_DROPIFY_BATCH_STORE') || BAKATA_DROPIFY_BATCH_STORE !== $store
+        || !is_string($store) || !preg_match('/\A[1-9][0-9]{0,9}\z/D',$store)
+        || !defined('BAKATA_DROPIFY_BATCH_FIRST') || !defined('BAKATA_DROPIFY_BATCH_LAST')
+        || !is_int(BAKATA_DROPIFY_BATCH_FIRST) || !is_int(BAKATA_DROPIFY_BATCH_LAST)
+        || BAKATA_DROPIFY_BATCH_FIRST < 1 || BAKATA_DROPIFY_BATCH_LAST > 100
+        || BAKATA_DROPIFY_BATCH_LAST < BAKATA_DROPIFY_BATCH_FIRST
+        || BAKATA_DROPIFY_BATCH_LAST-BAKATA_DROPIFY_BATCH_FIRST >= 10
+        || !is_int($page) || $page < BAKATA_DROPIFY_BATCH_FIRST || $page > BAKATA_DROPIFY_BATCH_LAST
+        || !defined('BAKATA_DROPIFY_BATCH_UNTIL') || !is_int(BAKATA_DROPIFY_BATCH_UNTIL)
+        || BAKATA_DROPIFY_BATCH_UNTIL <= time() || BAKATA_DROPIFY_BATCH_UNTIL > time()+1800) {
+        return false;
+    }
+    $host=strtolower((string)wp_parse_url(home_url(),PHP_URL_HOST));
+    $site=strtolower((string)wp_parse_url(site_url(),PHP_URL_HOST));
+    if ($host==='' || $host!==$site || $host!==BAKATA_DROPIFY_BATCH_HOST
+        || in_array($host,['bakata.store','www.bakata.store','dev.bakata.store'],true)) { return false; }
+    if ($host==='localhost' || $host==='127.0.0.1') {
+        return getenv('BAKATA_DROPIFY_SANDBOX')==='1';
+    }
+    return wp_parse_url(home_url(),PHP_URL_SCHEME)==='https'
+        && wp_parse_url(site_url(),PHP_URL_SCHEME)==='https';
+}
+
+function bakata_catalog_batch_approval($run,$page)
+{
+    return 'batch-'.hash('sha256',$run.':'.$page);
+}
+
+function bakata_catalog_batch_cli_authorized($store,$offset,$query)
+{
+    return is_int($offset) && $offset>=0 && $offset%10===0 && $query===''
+        && defined('BAKATA_DROPIFY_BATCH_RUN')
+        && bakata_catalog_batch_scope(BAKATA_DROPIFY_BATCH_RUN,$store,intdiv($offset,10)+1)
+        && defined('BAKATA_DROPIFY_CATALOG_APPROVAL_REF')
+        && BAKATA_DROPIFY_CATALOG_APPROVAL_REF===bakata_catalog_batch_approval(BAKATA_DROPIFY_BATCH_RUN,intdiv($offset,10)+1);
+}
