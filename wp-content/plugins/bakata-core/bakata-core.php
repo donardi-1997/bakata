@@ -34,7 +34,11 @@ require_once __DIR__ . '/src/Intelligence/DraftBridge.php';
 require_once __DIR__ . '/src/Intelligence/DropifyPreview.php';
 require_once __DIR__ . '/src/Intelligence/DropifyDiagnostics.php';
 
+require_once __DIR__ . '/src/Intelligence/CatalogReviewSnapshot.php';
+require_once __DIR__ . '/src/Intelligence/CatalogReviewPanel.php';
+
 Intelligence\AdminPanel::register();
+Intelligence\CatalogReviewPanel::register();
 
 // Export only visible catalog rows from the existing authenticated Dropify screen.
 // No connector methods, token lookup, HTTP requests or catalog changes.
