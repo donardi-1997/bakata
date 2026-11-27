@@ -1,7 +1,9 @@
 <?php
 declare(strict_types=1);
 define('ABSPATH', __DIR__);
-require $argv[1] . '/clasess/views/Products.php';
+class WP_List_Table {}
+$fullBuild = isset($argv[1]);
+require $fullBuild ? $argv[1] . '/clasess/views/Products.php' : __DIR__ . '/../tools/dropify-quarantine/catalog-bridge.php';
 function ck($ok) { if (!$ok) throw new RuntimeException('Catalog assertion failed'); }
 function reject($fn) { try { $fn(); } catch (InvalidArgumentException $e) { return; } throw new RuntimeException('Expected rejection'); }
 ck(bakata_catalog_offset(1,10)===0 && bakata_catalog_offset(2,10)===10 && bakata_catalog_offset(3,10)===20);
@@ -25,7 +27,13 @@ ck(bakata_catalog_project([$multi],'7',1,10)['rows'][0]['simple_stock']===null);
 reject(fn()=>bakata_catalog_project([$item,$item],'7',1,10));
 reject(fn()=>bakata_catalog_project([$item],'8',1,10));
 ck(bakata_catalog_project([],'7',1,10)['rows']===[]);
-$reflection=new ReflectionClass(JPIODFW_ProductsModel::class);
-$model=$reflection->newInstanceWithoutConstructor();
-ck($model->getProducts(10,0,'','id','asc',null,null,null,null,null,'7',[])===null);
+if ($fullBuild) {
+    $reflection=new ReflectionClass(JPIODFW_ProductsModel::class);
+    $model=$reflection->newInstanceWithoutConstructor();
+    ck($model->getProducts(10,0,'','id','asc',null,null,null,null,null,'7',[])===null);
+    ck($model->import_product(96)['success']===false);
+}
+if (getenv('BAKATA_BRIDGE_FIXTURE') === '1') {
+    file_put_contents('/tmp/bakata-dropify-bridge-fixture.json',json_encode($data,JSON_THROW_ON_ERROR));
+}
 echo "Catalog bridge projection and disabled-by-default checks passed.\n";
