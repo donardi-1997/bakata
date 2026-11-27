@@ -1,0 +1,14 @@
+# INT-17A — Radar offline de oportunidades y riesgos
+
+Primera pieza del radar, independiente de la aprobación comercial y de la UI. Lee exclusivamente un BridgeArchive existente (INT-15D), en modo SQLite read-only y una transacción de lectura. No llama a Dropi, no programa capturas, no escribe productos, no envía alertas externas.
+
+    cd services/intelligence
+    python3 -m intelligence.opportunity_radar --db /privado/bridge.sqlite --store 7 --price-threshold-bps 500 --limit 100
+
+El umbral explícito de 500 bps equivale a 5% (ejemplo, no política comercial aprobada). Compara las dos últimas observaciones por ID de producto dentro de una misma tienda local. Usa Decimal para precios reportados; no asume moneda ni los convierte a costo de adquisición. Se informa la variación de precio base y sugerido por separado. Cero a positivo, precio desconocido, stock a cero, reaparición de stock y pérdida de conocimiento generan señales específicas. Un cambio de SKU, tipo o bodega bloquea la comparación de precios y stock hasta revisar identidad/alcance. Captura de más de 24h o futura genera señal de revisión; base anterior separada por más de 30 días no se usa para variación. Esos límites son decisiones conservadoras de esta versión, no una garantía de frecuencia o frescura del proveedor.
+
+La ausencia de un ID en otra página, incluso vacía, no se interpreta como retirada ni stock cero. Una primera observación es informativa; no significa producto nuevo en Dropi. La existencia de vínculo de scoring anterior sin vínculo para observación actual señala reevaluación; no se afirma que un vínculo actual sea válido ni se ordena por rentabilidad. Las prioridades review-first/review/informational son de triaje, no probabilidad de ventas. No infiere demanda, margen o proveedor confiable.
+
+Cada señal incluye dos instantes (cuando hay comparación), identificador estable para la pareja observada, valores reportados y referencias SHA-256 de páginas y autorizaciones archivadas. La huella es referencia de procedencia, no prueba de autenticidad. El identificador no es un recibo de entrega ni registro de alertas. Se rechaza falta de procedencia y más de 20 referencias por observación. Batches de hasta 100 identidades, orden lexicográfico de ID, siguiente cursor next_after si hay más; pasarlo con --after. Cada ejecución es un snapshot local; entre batches el archivo puede cambiar, por lo que no promete cobertura global atómica. No se ignoran errores de integridad para emitir resultados parciales.
+
+Foundation checks ejecuta fixtures unitarias de cambios de precio, límites, ceros, desconocidos, cambio de alcance, antigüedad, página vacía, paginación, aislamiento de tienda, reevaluación y procedencia. El siguiente frente será persistencia/deduplicación de señales y vista de revisión, con pruebas de entrega antes de notificaciones. Captura real sigue bloqueada por las condiciones de INT-15G/H.
