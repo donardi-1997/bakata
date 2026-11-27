@@ -110,3 +110,25 @@ class PilotTests(unittest.TestCase):
                 https_get("https://catalog.example.com"+PATH,"catalog.example.com",10,524288,
                           accept="application/json",expected_ip="8.8.8.8")
             conn.assert_not_called()
+
+    def test_pilot_persists_archive_before_receipt(self):
+        from intelligence.storage import CommercialStore
+        archive_db=sqlite3.connect(":memory:")
+        self.addCleanup(archive_db.close)
+        archive=CommercialStore(archive_db)
+        raw=self.raw()
+        result=execute(raw,hashlib.sha256(raw).hexdigest(),self.ledger,transport=self.transport,archive=archive)
+        row=result["observations"][0]
+        key=(row["source"],row["external_id"],row["observed_at"].isoformat())
+        self.assertEqual(archive.observation(key).price_minor,4990000)
+        self.assertEqual(archive.provenance(key)[0]["id"],result["capture_id"])
+        self.assertEqual(self.db.execute("SELECT state FROM int_pilot_receipts").fetchone()[0],"succeeded")
+
+    def test_archive_error_prevents_successful_receipt(self):
+        archive=Mock()
+        archive.ingest.side_effect=RuntimeError("archive unavailable")
+        raw=self.raw()
+        with self.assertRaisesRegex(RuntimeError,"archive unavailable"):
+            execute(raw,hashlib.sha256(raw).hexdigest(),self.ledger,transport=self.transport,archive=archive)
+        self.assertEqual(self.db.execute("SELECT state FROM int_pilot_receipts").fetchone()[0],"failed-review")
+        self.transport.assert_called_once()
