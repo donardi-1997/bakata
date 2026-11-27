@@ -25,9 +25,11 @@ function bakata_catalog_decimal($value)
         ? $value : null;
 }
 
-function bakata_catalog_project($items, $storeId, $page, $size)
+function bakata_catalog_project($items, $storeId, $page, $size, $approvalRef, $query)
 {
     $offset = bakata_catalog_offset($page, $size);
+    if (!is_string($approvalRef) || !preg_match('/\\A[A-Za-z0-9._-]{1,128}\\z/D',$approvalRef)
+        || !is_string($query) || strlen($query)>120) { throw new InvalidArgumentException('Invalid capture provenance.'); }
     if (!is_string($storeId) || !preg_match('/\A[1-9][0-9]{0,9}\z/D', $storeId)
         || !is_array($items) || count($items) > $size) {
         throw new InvalidArgumentException('Invalid catalog response.');
@@ -66,6 +68,7 @@ function bakata_catalog_project($items, $storeId, $page, $size)
     }
     return array('schema'=>'bakata-dropify-bridge-v1', 'captured_at'=>gmdate('Y-m-d\TH:i:s\Z'),
         'store_id'=>$storeId, 'page'=>$page, 'page_size'=>$size, 'offset'=>$offset,
+        'approval_ref'=>$approvalRef, 'query_sha256'=>hash('sha256',$query),
         'possible_next'=>count($rows)===$size, 'rows'=>$rows);
 }
 
@@ -110,7 +113,7 @@ function bakata_catalog_render($list)
             if (!is_array($response) || !isset($response['objects'])) {
                 throw new RuntimeException('Catalog unavailable.');
             }
-            $result=bakata_catalog_project($response['objects'],$store,$page,$size);
+            $result=bakata_catalog_project($response['objects'],$store,$page,$size,BAKATA_DROPIFY_CATALOG_APPROVAL_REF,$query);
         } catch (Throwable $e) {
             $error=true;
             $result=null;
