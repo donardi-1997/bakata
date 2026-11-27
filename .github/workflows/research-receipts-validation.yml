@@ -7,6 +7,9 @@ on:
       - 'services/intelligence/intelligence/dropify_bridge.py'
       - 'services/intelligence/intelligence/dropify_capture.py'
       - 'scripts/test-research-receipts-aws.py'
+      - 'services/intelligence/intelligence/research_pair_*.py'
+      - 'services/intelligence/tests/test_research_pair_*.py'
+      - 'infra/research-aws/pair-controller.json'
       - '.github/workflows/research-receipts-validation.yml'
   workflow_dispatch:
 permissions:
@@ -32,3 +35,16 @@ jobs:
           AWS_DEFAULT_REGION: us-east-1
           PYTHONPATH: services/intelligence
         run: /tmp/bk-receipt-tests/bin/python scripts/test-research-receipts-aws.py -v
+      - name: Pair controller and DynamoDB pair ledger without network calls
+        env:
+          AWS_ACCESS_KEY_ID: fixture
+          AWS_SECRET_ACCESS_KEY: fixture
+          AWS_SESSION_TOKEN: fixture
+          AWS_EC2_METADATA_DISABLED: 'true'
+          AWS_DEFAULT_REGION: us-east-1
+          PYTHONPATH: services/intelligence
+        run: |
+          set -o pipefail
+          /tmp/bk-receipt-tests/bin/python -m unittest discover -s services/intelligence/tests -p 'test_research_pair_*.py' -v 2>&1 | tee /tmp/pair-tests.log
+          # The DynamoDB tests must run here, not be skipped for a missing SDK.
+          if grep -Eq '^(OK|FAILED) \(.*skipped=' /tmp/pair-tests.log; then echo 'Pair tests were skipped'; exit 1; fi
