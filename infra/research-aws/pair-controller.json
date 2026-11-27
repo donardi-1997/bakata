@@ -68,25 +68,10 @@
       "Default": "",
       "AllowedPattern": "^$|^[0-9a-f]{32}$"
     },
-    "ProxySubnet": {
+    "FoundationStackName": {
       "Type": "String",
       "Default": "",
-      "AllowedPattern": "^$|^subnet-[0-9a-f]{17}$"
-    },
-    "ProxySecurityGroup": {
-      "Type": "String",
-      "Default": "",
-      "AllowedPattern": "^$|^sg-[0-9a-f]{17}$"
-    },
-    "WorkerSubnet": {
-      "Type": "String",
-      "Default": "",
-      "AllowedPattern": "^$|^subnet-[0-9a-f]{17}$"
-    },
-    "WorkerSecurityGroup": {
-      "Type": "String",
-      "Default": "",
-      "AllowedPattern": "^$|^sg-[0-9a-f]{17}$"
+      "AllowedPattern": "^$|^bakata-research-[A-Za-z0-9-]{1,80}$"
     }
   },
   "Rules": {
@@ -256,76 +241,14 @@
               {
                 "Fn::Equals": [
                   {
-                    "Ref": "ProxySubnet"
+                    "Ref": "FoundationStackName"
                   },
                   ""
                 ]
               }
             ]
           },
-          "AssertDescription": "Reviewed ProxySubnet required"
-        },
-        {
-          "Assert": {
-            "Fn::Not": [
-              {
-                "Fn::Equals": [
-                  {
-                    "Ref": "ProxySecurityGroup"
-                  },
-                  ""
-                ]
-              }
-            ]
-          },
-          "AssertDescription": "Reviewed ProxySecurityGroup required"
-        },
-        {
-          "Assert": {
-            "Fn::Not": [
-              {
-                "Fn::Equals": [
-                  {
-                    "Ref": "WorkerSubnet"
-                  },
-                  ""
-                ]
-              }
-            ]
-          },
-          "AssertDescription": "Reviewed WorkerSubnet required"
-        },
-        {
-          "Assert": {
-            "Fn::Not": [
-              {
-                "Fn::Equals": [
-                  {
-                    "Ref": "WorkerSecurityGroup"
-                  },
-                  ""
-                ]
-              }
-            ]
-          },
-          "AssertDescription": "Reviewed WorkerSecurityGroup required"
-        },
-        {
-          "Assert": {
-            "Fn::Not": [
-              {
-                "Fn::Equals": [
-                  {
-                    "Ref": "ProxySecurityGroup"
-                  },
-                  {
-                    "Ref": "WorkerSecurityGroup"
-                  }
-                ]
-              }
-            ]
-          },
-          "AssertDescription": "Worker and proxy security groups must differ"
+          "AssertDescription": "Reviewed foundation stack required (network is imported)"
         }
       ]
     },
@@ -718,16 +641,24 @@
               "Ref": "WorkerTaskDefinitionArn"
             },
             "BAKATA_PROXY_SUBNET": {
-              "Ref": "ProxySubnet"
+              "Fn::ImportValue": {
+                "Fn::Sub": "${FoundationStackName}-ProxyFixtureSubnet"
+              }
             },
             "BAKATA_PROXY_SECURITY_GROUP": {
-              "Ref": "ProxySecurityGroup"
+              "Fn::ImportValue": {
+                "Fn::Sub": "${FoundationStackName}-ProxyFixtureSecurityGroup"
+              }
             },
             "BAKATA_WORKER_SUBNET": {
-              "Ref": "WorkerSubnet"
+              "Fn::ImportValue": {
+                "Fn::Sub": "${FoundationStackName}-ProxyFixtureWorkerSubnet"
+              }
             },
             "BAKATA_WORKER_SECURITY_GROUP": {
-              "Ref": "WorkerSecurityGroup"
+              "Fn::ImportValue": {
+                "Fn::Sub": "${FoundationStackName}-ProxyFixtureWorkerSecurityGroup"
+              }
             }
           }
         }

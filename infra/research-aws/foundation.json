@@ -1597,24 +1597,44 @@
       "Condition": "ProxyFixtureEnabled",
       "Value": {
         "Ref": "ProxyFixtureWorkerSubnet"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ProxyFixtureWorkerSubnet"
+        }
       }
     },
     "ProxyFixtureSubnet": {
       "Condition": "ProxyFixtureEnabled",
       "Value": {
         "Ref": "ProxyFixtureSubnet"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ProxyFixtureSubnet"
+        }
       }
     },
     "ProxyFixtureWorkerSecurityGroup": {
       "Condition": "ProxyFixtureEnabled",
       "Value": {
         "Ref": "ProxyFixtureWorkerSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ProxyFixtureWorkerSecurityGroup"
+        }
       }
     },
     "ProxyFixtureSecurityGroup": {
       "Condition": "ProxyFixtureEnabled",
       "Value": {
         "Ref": "ProxyFixtureSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ProxyFixtureSecurityGroup"
+        }
       }
     }
   }
