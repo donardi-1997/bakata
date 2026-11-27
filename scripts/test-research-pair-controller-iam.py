@@ -69,20 +69,65 @@ EXPECTED_PATTERNS = {
     "WorkerTaskRoleArn": "^$|^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_-]{1,64}$",
     "WorkerExecutionRoleArn": "^$|^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_-]{1,64}$",
     "ProxyExecutionRoleArn": "^$|^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_-]{1,64}$",
+    "CodeBucket": "^$|^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$",
+    "CodeKey": "^$|^[A-Za-z0-9/_.-]{1,512}\\.zip$",
+    "CodeVersion": "^$|^[A-Za-z0-9._-]{1,1024}$",
+    "PairNonce": "^$|^[0-9a-f]{32}$",
+    "ProxySubnet": "^$|^subnet-[0-9a-f]{17}$",
+    "ProxySecurityGroup": "^$|^sg-[0-9a-f]{17}$",
+    "WorkerSubnet": "^$|^subnet-[0-9a-f]{17}$",
+    "WorkerSecurityGroup": "^$|^sg-[0-9a-f]{17}$",
 }
+FLAG = {"Type": "String", "Default": "false", "AllowedValues": ["false", "true"]}
+EXPECTED_ASSERTIONS = ([{"Fn::Not": [{"Fn::Equals": [{"Ref": k}, ""]}]} for k in EXPECTED_PATTERNS]
+                       + [{"Fn::Not": [{"Fn::Equals": [{"Ref": "ProxySecurityGroup"}, {"Ref": "WorkerSecurityGroup"}]}]}])
+EXPECTED_FUNCTION = {
+    "FunctionName": {"Fn::Sub": "${AWS::StackName}-pair-controller"},
+    "Runtime": "python3.12",
+    "Architectures": ["x86_64"],
+    "Handler": "intelligence.research_pair_handler.handler",
+    "Role": {"Fn::GetAtt": ["ControllerRole", "Arn"]},
+    "Code": {"S3Bucket": {"Ref": "CodeBucket"}, "S3Key": {"Ref": "CodeKey"}, "S3ObjectVersion": {"Ref": "CodeVersion"}},
+    "Timeout": 120,
+    "MemorySize": 128,
+    "ReservedConcurrentExecutions": 1,
+    "LoggingConfig": {"LogGroup": {"Ref": "ControllerLogs"}},
+    "Environment": {"Variables": {
+        "BAKATA_PAIR_CONTROLLER_ENABLED": "true",
+        "BAKATA_PAIR_LAUNCH_ENABLED": {"Ref": "EnablePairLaunch"},
+        "BAKATA_PAIR_TABLE": {"Ref": "PairLedger"},
+        "BAKATA_PAIR_NONCE": {"Ref": "PairNonce"},
+        "BAKATA_CLUSTER": {"Ref": "ClusterArn"},
+        "BAKATA_PROXY_DEFINITION": {"Ref": "ProxyTaskDefinitionArn"},
+        "BAKATA_WORKER_DEFINITION": {"Ref": "WorkerTaskDefinitionArn"},
+        "BAKATA_PROXY_SUBNET": {"Ref": "ProxySubnet"},
+        "BAKATA_PROXY_SECURITY_GROUP": {"Ref": "ProxySecurityGroup"},
+        "BAKATA_WORKER_SUBNET": {"Ref": "WorkerSubnet"},
+        "BAKATA_WORKER_SECURITY_GROUP": {"Ref": "WorkerSecurityGroup"},
+    }},
+}
+# No schedule, event source, URL or invoke permission: only an operator can invoke.
 ALLOWED_TYPES = {"PairLedger": "AWS::DynamoDB::Table", "ControllerLogs": "AWS::Logs::LogGroup",
-                 "ControllerRole": "AWS::IAM::Role"}
+                 "ControllerRole": "AWS::IAM::Role", "ControllerFunction": "AWS::Lambda::Function",
+                 "ControllerInvokeConfig": "AWS::Lambda::EventInvokeConfig"}
+# Lambda must never retry or replay an async invocation on its own (it could launch late).
+EXPECTED_INVOKE_CONFIG = {"FunctionName": {"Ref": "ControllerFunction"}, "Qualifier": "$LATEST",
+                          "MaximumRetryAttempts": 0, "MaximumEventAgeInSeconds": 60}
+EXPECTED_REGION_RULE = {"RuleCondition": {"Fn::Equals": [{"Ref": "EnablePairController"}, "true"]},
+                        "Assertions": [{"Assert": {"Fn::Equals": [{"Ref": "AWS::Region"}, "us-east-1"]},
+                                        "AssertDescription": "Pair controller is reviewed for us-east-1 only"}]}
 
 
 def violations(t):
     found = []
     params = t["Parameters"]
-    enable = params.get("EnablePairController", {})
-    if enable != {"Type": "String", "Default": "false", "AllowedValues": ["false", "true"]}:
+    if params.get("EnablePairController") != FLAG:
         found.append("enable flag changed")
+    if params.get("EnablePairLaunch") != FLAG:
+        found.append("launch flag changed")
     if t.get("Conditions") != {ON: {"Fn::Equals": [{"Ref": "EnablePairController"}, "true"]}}:
         found.append("condition changed")
-    if set(params) != {"EnablePairController", *EXPECTED_PATTERNS}:
+    if set(params) != {"EnablePairController", "EnablePairLaunch", *EXPECTED_PATTERNS}:
         found.append("parameters changed")
     for key, pattern in EXPECTED_PATTERNS.items():
         if params.get(key, {}).get("AllowedPattern") != pattern or params[key].get("Default") != "":
@@ -91,8 +136,14 @@ def violations(t):
     if rule.get("RuleCondition") != {"Fn::Equals": [{"Ref": "EnablePairController"}, "true"]}:
         found.append("rule condition changed")
     required = [a.get("Assert") for a in rule.get("Assertions", [])]
-    if required != [{"Fn::Not": [{"Fn::Equals": [{"Ref": k}, ""]}]} for k in EXPECTED_PATTERNS]:
+    if required != EXPECTED_ASSERTIONS:
         found.append("inputs not all required when enabled")
+    if t["Resources"].get("ControllerFunction", {}).get("Properties") != EXPECTED_FUNCTION:
+        found.append("controller function changed")
+    if t["Resources"].get("ControllerInvokeConfig", {}).get("Properties") != EXPECTED_INVOKE_CONFIG:
+        found.append("async retries or event age changed")
+    if t.get("Rules", {}).get("ReviewedRegion") != EXPECTED_REGION_RULE:
+        found.append("region rule changed")
 
     resources = t["Resources"]
     if {k: v.get("Type") for k, v in resources.items()} != ALLOWED_TYPES:
@@ -218,6 +269,25 @@ TEMPLATE_MUTATIONS = {
     "managed policy": lambda t: t["Resources"]["ControllerRole"]["Properties"].update(ManagedPolicyArns=["arn:aws:iam::aws:policy/AdministratorAccess"]),
     "role path breaks ledger ARN": lambda t: t["Resources"]["ControllerRole"]["Properties"].update(Path="/x/"),
     "logs any group": lambda t: _stmt(t, "OwnLogsOnly").update(Resource="*"),
+    "launch hard-enabled": lambda t: t["Resources"]["ControllerFunction"]["Properties"]["Environment"]["Variables"].update(
+        BAKATA_PAIR_LAUNCH_ENABLED="true"),
+    "launch flag default true": lambda t: t["Parameters"]["EnablePairLaunch"].update(Default="true"),
+    "unpinned code version": lambda t: t["Resources"]["ControllerFunction"]["Properties"]["Code"].pop("S3ObjectVersion"),
+    "parallel invocations": lambda t: t["Resources"]["ControllerFunction"]["Properties"].pop("ReservedConcurrentExecutions"),
+    "other execution role": lambda t: t["Resources"]["ControllerFunction"]["Properties"].update(
+        Role="arn:aws:iam::123456789012:role/Admin"),
+    "env from extra variable": lambda t: t["Resources"]["ControllerFunction"]["Properties"]["Environment"]["Variables"].update(
+        AWS_ENDPOINT_URL="http://evil"),
+    "schedule added": lambda t: t["Resources"].update(S={"Type": "AWS::Events::Rule", "Condition": ON}),
+    "public invoke permission": lambda t: t["Resources"].update(P2={"Type": "AWS::Lambda::Permission", "Condition": ON}),
+    "function URL": lambda t: t["Resources"].update(U={"Type": "AWS::Lambda::Url", "Condition": ON}),
+    "same SG allowed": lambda t: t["Rules"]["ReviewedInputsWhenEnabled"]["Assertions"].pop(),
+    "nonce pattern widened": lambda t: t["Parameters"]["PairNonce"].update(AllowedPattern=".*"),
+    "async retries default": lambda t: t["Resources"].pop("ControllerInvokeConfig"),
+    "async retries enabled": lambda t: t["Resources"]["ControllerInvokeConfig"]["Properties"].update(MaximumRetryAttempts=2),
+    "stale events replayed": lambda t: t["Resources"]["ControllerInvokeConfig"]["Properties"].update(MaximumEventAgeInSeconds=21600),
+    "any region": lambda t: t["Rules"].pop("ReviewedRegion"),
+    "short timeout": lambda t: t["Resources"]["ControllerFunction"]["Properties"].update(Timeout=10),
 }
 
 

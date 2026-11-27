@@ -1,6 +1,28 @@
 # INT-18H.3c.2d — Frontera IAM del controlador de par (plantilla durmiente)
 
-`infra/research-aws/pair-controller.json` declara, solo con `EnablePairController=true`, el ledger DynamoDB del par y el rol del controlador. No crea Lambda, programación, servicio ni definición de tarea. El controlador (`research_pair_controller.py`) puede usar este ledger mediante `research_pair_dynamo_ledger.py` (probado con Moto); falta el handler y su despliegue. No se ha creado ningún stack.
+`infra/research-aws/pair-controller.json` declara, solo con `EnablePairController=true`, el ledger DynamoDB del par, el rol del controlador y la función Lambda `<stack>-pair-controller`. No crea programación, origen de eventos, URL de función ni permiso de invocación: solo un operador con `lambda:InvokeFunction` puede invocarla. Tampoco crea servicio ni definición de tarea. No se ha creado ningún stack.
+
+## Handler Lambda
+
+`research_pair_handler.handler` (`research_pair_handler.py`) ejecuta el controlador con el ledger DynamoDB:
+
+- Responde `disabled` sin crear clientes salvo que `BAKATA_PAIR_CONTROLLER_ENABLED` sea exactamente `true`, y solo opera en `us-east-1`.
+- **Toda la configuración procede del entorno del despliegue.** El evento solo puede ser `{"action": "supervise"}` o `{"action": "launch", "role": "proxy"|"worker"}`; cualquier otra clave se rechaza antes de crear clientes, de modo que el invocador nunca aporta ARNs, subredes, tabla ni nonce.
+- `launch` exige además `BAKATA_PAIR_LAUNCH_ENABLED=true` (parámetro `EnablePairLaunch`, apagado por defecto); `supervise` no.
+- Clientes con `total_max_attempts=1`, timeouts de 3/5 s y endpoints configurados por entorno ignorados (probado: un `AWS_ENDPOINT_URL` hostil no los redirige).
+- Nunca inicializa el ledger: `DynamoLedger.initialize` con la autorización y su nonce es una acción previa del operador; sin ella el handler falla.
+- La función usa código de S3 con **versión de objeto obligatoria**, timeout de 120 s, concurrencia reservada 1 (invocaciones serializadas; la garantía real es el CAS del ledger) y logs en `ControllerLogs`. Reglas: región `us-east-1` y security groups distintos para worker y proxy. Un test compara las variables de entorno de la plantilla con las que lee el handler.
+- **Sin reintentos asíncronos de Lambda:** `EventInvokeConfig` fija `MaximumRetryAttempts=0` y `MaximumEventAgeInSeconds=60`. Sin ello, un `launch` que fallara antes de su claim podía reintentarse sin que nadie lo pidiera hasta horas después. Invocar `launch` solo de forma síncrona (`RequestResponse`), con `AWS_MAX_ATTEMPTS=1` (o `max_attempts = 1` en el perfil) y `--cli-read-timeout` mayor que 120 s: el CLI reintenta también errores como `TooManyRequestsException`, probable con concurrencia reservada 1. Esos reintentos serían seguros por el ledger, pero tardíos. La configuración se aplica a `$LATEST`; una versión o alias publicados tendrían los reintentos por defecto (la plantilla no los crea: no publicarlos).
+- **Tiempo de invocación:** el controlador recibe el tiempo restante de Lambda y no persiste un `claim-launch` ni un `claim-stop` si quedan menos de 60 s (peor caso estimado del lanzamiento del worker: 4 llamadas de ~8 s más el bind). Esto **reduce** el riesgo de que un timeout deje un claim sin efecto, sin eliminarlo: el timeout de lectura limita cada lectura del socket, no la petición entera. Si se agota el tiempo durante un tick, la segunda parada se pospone a la siguiente invocación sin reservarse. Un corte por otras causas sigue exigiendo reconciliación manual, como antes.
+
+Pruebas: `tests/test_research_pair_handler.py`, 9 casos con Moto y un ECS falso (desactivado, eventos hostiles, segundo opt-in y región, ledger no inicializado, ciclo completo, coherencia con la plantilla, clientes de producción, punto de entrada con el tiempo de Lambda y **validación de cada petición a ECS contra el modelo de la API de botocore**, incluido `ListTasks`).
+
+Límites del handler:
+
+- **El plazo no se aplica solo.** No hay programación: la parada por vencimiento depende de que un operador invoque `supervise` (o de una programación futura revisada). El proxy deja de aceptar túneles al llegar `BAKATA_RESEARCH_UNTIL`, pero eso no demuestra que la tarea termine; el watchdog de `watchdog.json` cubre otra definición de tarea.
+- Subredes y security groups son parámetros: nada obliga a que sean los de `foundation.json` (sus salidas no se exportan), y `_describe` verifica la subred pero no el SG. Revisarlos al desplegar o exportar esas salidas e importarlas.
+- Los logs y errores incluyen ARNs de tareas, cuenta, run y mensajes de botocore; no incluyen el nonce ni secretos. El nonce es visible para quien pueda leer la configuración de la función.
+- La concurrencia reservada exige margen de cuota en la cuenta. No hay firma de código; la versión de objeto fijada mitiga la sustitución del paquete.
 
 ## Separación
 
@@ -15,7 +37,7 @@
 - `ecs:TagResource` solo durante `RunTask`; `DescribeTasks`/`StopTask` solo en tareas del clúster con la etiqueta de propósito; `ListTasks` condicionado al clúster.
 - `iam:PassRole` solo para el task role del worker y los dos execution roles, y solo hacia `ecs-tasks.amazonaws.com`.
 - Ledger: `GetItem`, `Query`, `PutItem` en particiones `PAIR#*` (`TransactWriteItems` se autoriza como `PutItem` por ítem); sin `UpdateItem`, `DeleteItem` ni `ConditionCheckItem`.
-- Confianza: `lambda.amazonaws.com` con `aws:SourceAccount`. Sin políticas gestionadas ni `Path`.
+- Confianza: `lambda.amazonaws.com` con `aws:SourceAccount`. Sin políticas gestionadas ni `Path`. La [documentación de Lambda](https://docs.aws.amazon.com/lambda/latest/dg/permissions-managed-policies.html) admite `aws:SourceAccount`/`aws:SourceArn` en la confianza del rol de ejecución, pero no confirma explícitamente que Lambda envíe ese valor al asumirlo: si no lo hiciera, la creación o ejecución de la función fallaría (falla cerrado). Validarlo en el ensayo; la alternativa es la confianza sin condición que usa `watchdog.json`.
 
 Las claves de condición usadas figuran en la Service Authorization Reference de ECS y DynamoDB para esas acciones (verificado en auditoría independiente, sin evaluación contra AWS).
 
@@ -32,8 +54,8 @@ Las claves de condición usadas figuran en la Service Authorization Reference de
 
 ## Verificación
 
-- `cfn-lint` 1.61.0 sin errores (5 avisos W1030 por parámetros vacíos por defecto; con el flag activado, `ReviewedInputsWhenEnabled` los exige).
-- `scripts/test-research-pair-controller-iam.py` compara **exactamente** con los valores revisados cada sentencia del rol, su confianza, propiedades, patrones de parámetros, reglas, el conjunto de recursos y la política del ledger; y verifica entre plantillas el ingreso y la salida del proxy, la ausencia de task role del proxy y los límites del rol del worker. Detecta 34 mutaciones de plantilla y 8 de red/roles, incluidas las 24 de la auditoría (21 no detectadas por la primera versión). Se ejecuta en `research-aws-validation.yml`. Cualquier cambio legítimo exige actualizar el test a propósito.
+- `cfn-lint` 1.61.0 sin errores (9 avisos W1030 por parámetros vacíos por defecto; con el flag activado, `ReviewedInputsWhenEnabled` los exige).
+- `scripts/test-research-pair-controller-iam.py` compara **exactamente** con los valores revisados cada sentencia del rol, su confianza, propiedades, patrones de parámetros, reglas, el conjunto de recursos y la política del ledger; y verifica entre plantillas el ingreso y la salida del proxy, la ausencia de task role del proxy y los límites del rol del worker. Detecta 50 mutaciones de plantilla (incluidas función con lanzamiento forzado, código sin versión, concurrencia libre, programación, URL o permiso de invocación, reintentos asíncronos, eventos antiguos y región) y 8 de red/roles, incluidas las 24 de la auditoría (21 no detectadas por la primera versión). Se ejecuta en `research-aws-validation.yml`. Cualquier cambio legítimo exige actualizar el test a propósito.
 
 ## Límites
 

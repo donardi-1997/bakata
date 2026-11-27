@@ -1,30 +1,367 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Dormant IAM boundary for the research worker/proxy pair controller. No function, trigger or task. Network separation lives in foundation.json.",
+  "Description": "Dormant pair controller: ledger, least-privilege role and a disabled-by-default Lambda with no schedule, URL or invoke permission. Network separation lives in foundation.json.",
   "Parameters": {
-    "EnablePairController": {"Type": "String", "Default": "false", "AllowedValues": ["false", "true"]},
-    "ClusterArn": {"Type": "String", "Default": "", "AllowedPattern": "^$|^arn:aws:ecs:us-east-1:[0-9]{12}:cluster/bakata-research-[A-Za-z0-9_-]{1,80}$"},
-    "WorkerTaskDefinitionArn": {"Type": "String", "Default": "", "AllowedPattern": "^$|^arn:aws:ecs:us-east-1:[0-9]{12}:task-definition/bakata-research-[A-Za-z0-9_-]{1,80}-persistent-fixture:[1-9][0-9]*$"},
-    "ProxyTaskDefinitionArn": {"Type": "String", "Default": "", "AllowedPattern": "^$|^arn:aws:ecs:us-east-1:[0-9]{12}:task-definition/bakata-research-[A-Za-z0-9_-]{1,80}-proxy-fixture:[1-9][0-9]*$"},
-    "WorkerTaskRoleArn": {"Type": "String", "Default": "", "AllowedPattern": "^$|^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_-]{1,64}$"},
-    "WorkerExecutionRoleArn": {"Type": "String", "Default": "", "AllowedPattern": "^$|^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_-]{1,64}$"},
-    "ProxyExecutionRoleArn": {"Type": "String", "Default": "", "AllowedPattern": "^$|^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_-]{1,64}$"}
+    "EnablePairController": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ]
+    },
+    "ClusterArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^arn:aws:ecs:us-east-1:[0-9]{12}:cluster/bakata-research-[A-Za-z0-9_-]{1,80}$"
+    },
+    "WorkerTaskDefinitionArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^arn:aws:ecs:us-east-1:[0-9]{12}:task-definition/bakata-research-[A-Za-z0-9_-]{1,80}-persistent-fixture:[1-9][0-9]*$"
+    },
+    "ProxyTaskDefinitionArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^arn:aws:ecs:us-east-1:[0-9]{12}:task-definition/bakata-research-[A-Za-z0-9_-]{1,80}-proxy-fixture:[1-9][0-9]*$"
+    },
+    "WorkerTaskRoleArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_-]{1,64}$"
+    },
+    "WorkerExecutionRoleArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_-]{1,64}$"
+    },
+    "ProxyExecutionRoleArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_-]{1,64}$"
+    },
+    "EnablePairLaunch": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ]
+    },
+    "CodeBucket": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"
+    },
+    "CodeKey": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^[A-Za-z0-9/_.-]{1,512}\\.zip$"
+    },
+    "CodeVersion": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^[A-Za-z0-9._-]{1,1024}$"
+    },
+    "PairNonce": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^[0-9a-f]{32}$"
+    },
+    "ProxySubnet": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^subnet-[0-9a-f]{17}$"
+    },
+    "ProxySecurityGroup": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^sg-[0-9a-f]{17}$"
+    },
+    "WorkerSubnet": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^subnet-[0-9a-f]{17}$"
+    },
+    "WorkerSecurityGroup": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^sg-[0-9a-f]{17}$"
+    }
   },
   "Rules": {
     "ReviewedInputsWhenEnabled": {
-      "RuleCondition": {"Fn::Equals": [{"Ref": "EnablePairController"}, "true"]},
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "EnablePairController"
+          },
+          "true"
+        ]
+      },
       "Assertions": [
-        {"Assert": {"Fn::Not": [{"Fn::Equals": [{"Ref": "ClusterArn"}, ""]}]}, "AssertDescription": "Reviewed cluster ARN required"},
-        {"Assert": {"Fn::Not": [{"Fn::Equals": [{"Ref": "WorkerTaskDefinitionArn"}, ""]}]}, "AssertDescription": "Reviewed worker task definition required"},
-        {"Assert": {"Fn::Not": [{"Fn::Equals": [{"Ref": "ProxyTaskDefinitionArn"}, ""]}]}, "AssertDescription": "Reviewed proxy task definition required"},
-        {"Assert": {"Fn::Not": [{"Fn::Equals": [{"Ref": "WorkerTaskRoleArn"}, ""]}]}, "AssertDescription": "Reviewed worker task role required"},
-        {"Assert": {"Fn::Not": [{"Fn::Equals": [{"Ref": "WorkerExecutionRoleArn"}, ""]}]}, "AssertDescription": "Reviewed worker execution role required"},
-        {"Assert": {"Fn::Not": [{"Fn::Equals": [{"Ref": "ProxyExecutionRoleArn"}, ""]}]}, "AssertDescription": "Reviewed proxy execution role required"}
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "ClusterArn"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed cluster ARN required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "WorkerTaskDefinitionArn"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed worker task definition required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "ProxyTaskDefinitionArn"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed proxy task definition required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "WorkerTaskRoleArn"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed worker task role required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "WorkerExecutionRoleArn"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed worker execution role required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "ProxyExecutionRoleArn"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed proxy execution role required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "CodeBucket"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed CodeBucket required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "CodeKey"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed CodeKey required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "CodeVersion"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed CodeVersion required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "PairNonce"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed PairNonce required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "ProxySubnet"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed ProxySubnet required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "ProxySecurityGroup"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed ProxySecurityGroup required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "WorkerSubnet"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed WorkerSubnet required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "WorkerSecurityGroup"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed WorkerSecurityGroup required"
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "ProxySecurityGroup"
+                  },
+                  {
+                    "Ref": "WorkerSecurityGroup"
+                  }
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Worker and proxy security groups must differ"
+        }
+      ]
+    },
+    "ReviewedRegion": {
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "EnablePairController"
+          },
+          "true"
+        ]
+      },
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Equals": [
+              {
+                "Ref": "AWS::Region"
+              },
+              "us-east-1"
+            ]
+          },
+          "AssertDescription": "Pair controller is reviewed for us-east-1 only"
+        }
       ]
     }
   },
   "Conditions": {
-    "PairControllerEnabled": {"Fn::Equals": [{"Ref": "EnablePairController"}, "true"]}
+    "PairControllerEnabled": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnablePairController"
+        },
+        "true"
+      ]
+    }
   },
   "Resources": {
     "PairLedger": {
@@ -33,78 +370,403 @@
       "DeletionPolicy": "Retain",
       "UpdateReplacePolicy": "Retain",
       "Properties": {
-        "TableName": {"Fn::Sub": "${AWS::StackName}-pair-ledger"},
+        "TableName": {
+          "Fn::Sub": "${AWS::StackName}-pair-ledger"
+        },
         "BillingMode": "PAY_PER_REQUEST",
         "DeletionProtectionEnabled": true,
-        "SSESpecification": {"SSEEnabled": true},
-        "PointInTimeRecoverySpecification": {"PointInTimeRecoveryEnabled": true},
-        "AttributeDefinitions": [{"AttributeName": "pk", "AttributeType": "S"}, {"AttributeName": "sk", "AttributeType": "S"}],
-        "KeySchema": [{"AttributeName": "pk", "KeyType": "HASH"}, {"AttributeName": "sk", "KeyType": "RANGE"}],
-        "ResourcePolicy": {"PolicyDocument": {"Version": "2012-10-17", "Statement": [{
-          "Sid": "OnlyPairControllerWrites",
-          "Effect": "Deny",
-          "Principal": "*",
-          "Action": ["dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:BatchWriteItem",
-                     "dynamodb:PartiQLInsert", "dynamodb:PartiQLUpdate", "dynamodb:PartiQLDelete"],
-          "Resource": {"Fn::Sub": "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AWS::StackName}-pair-ledger"},
-          "Condition": {"ArnNotEquals": {"aws:PrincipalArn": {"Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${AWS::StackName}-pair-controller"}}}
-        }]}}
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "pk",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "sk",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "pk",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "sk",
+            "KeyType": "RANGE"
+          }
+        ],
+        "ResourcePolicy": {
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "OnlyPairControllerWrites",
+                "Effect": "Deny",
+                "Principal": "*",
+                "Action": [
+                  "dynamodb:PutItem",
+                  "dynamodb:UpdateItem",
+                  "dynamodb:DeleteItem",
+                  "dynamodb:BatchWriteItem",
+                  "dynamodb:PartiQLInsert",
+                  "dynamodb:PartiQLUpdate",
+                  "dynamodb:PartiQLDelete"
+                ],
+                "Resource": {
+                  "Fn::Sub": "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AWS::StackName}-pair-ledger"
+                },
+                "Condition": {
+                  "ArnNotEquals": {
+                    "aws:PrincipalArn": {
+                      "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${AWS::StackName}-pair-controller"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
       }
     },
     "ControllerLogs": {
       "Type": "AWS::Logs::LogGroup",
       "Condition": "PairControllerEnabled",
-      "Properties": {"RetentionInDays": 30}
+      "Properties": {
+        "RetentionInDays": 30
+      }
     },
     "ControllerRole": {
       "Type": "AWS::IAM::Role",
       "Condition": "PairControllerEnabled",
       "Properties": {
-        "RoleName": {"Fn::Sub": "${AWS::StackName}-pair-controller"},
-        "AssumeRolePolicyDocument": {"Version": "2012-10-17", "Statement": [{
-          "Effect": "Allow",
-          "Principal": {"Service": "lambda.amazonaws.com"},
-          "Action": "sts:AssumeRole",
-          "Condition": {"StringEquals": {"aws:SourceAccount": {"Ref": "AWS::AccountId"}}}
-        }]},
-        "Policies": [{
-          "PolicyName": "PairControllerLeastPrivilege",
-          "PolicyDocument": {"Version": "2012-10-17", "Statement": [
-            {"Sid": "RunOnlyReviewedDefinitions", "Effect": "Allow", "Action": "ecs:RunTask",
-             "Resource": [{"Ref": "WorkerTaskDefinitionArn"}, {"Ref": "ProxyTaskDefinitionArn"}],
-             "Condition": {"ArnEquals": {"ecs:cluster": {"Ref": "ClusterArn"}},
-                           "StringEquals": {"aws:RequestTag/bakata:purpose": "research-fixture"},
-                           "ForAllValues:StringEquals": {"aws:TagKeys": ["bakata:purpose", "bakata:role", "bakata:run", "bakata:until"]}}},
-            {"Sid": "NeverExecuteCommand", "Effect": "Deny", "Action": "ecs:RunTask", "Resource": "*",
-             "Condition": {"StringEquals": {"ecs:enable-execute-command": "true"}}},
-            {"Sid": "TagOnlyAtLaunch", "Effect": "Allow", "Action": "ecs:TagResource",
-             "Resource": {"Fn::Sub": ["arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task/${Name}/*",
-                                      {"Name": {"Fn::Select": [1, {"Fn::Split": [":cluster/", {"Ref": "ClusterArn"}]}]}}]},
-             "Condition": {"StringEquals": {"ecs:CreateAction": "RunTask"}}},
-            {"Sid": "ObserveAndStopResearchTasks", "Effect": "Allow", "Action": ["ecs:DescribeTasks", "ecs:StopTask"],
-             "Resource": {"Fn::Sub": ["arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task/${Name}/*",
-                                      {"Name": {"Fn::Select": [1, {"Fn::Split": [":cluster/", {"Ref": "ClusterArn"}]}]}}]},
-             "Condition": {"ArnEquals": {"ecs:cluster": {"Ref": "ClusterArn"}},
-                           "StringEquals": {"ecs:ResourceTag/bakata:purpose": "research-fixture"}}},
-            {"Sid": "ListOnlyResearchCluster", "Effect": "Allow", "Action": "ecs:ListTasks", "Resource": "*",
-             "Condition": {"ArnEquals": {"ecs:cluster": {"Ref": "ClusterArn"}}}},
-            {"Sid": "PassOnlyReviewedTaskRoles", "Effect": "Allow", "Action": "iam:PassRole",
-             "Resource": [{"Ref": "WorkerTaskRoleArn"}, {"Ref": "WorkerExecutionRoleArn"}, {"Ref": "ProxyExecutionRoleArn"}],
-             "Condition": {"StringEquals": {"iam:PassedToService": "ecs-tasks.amazonaws.com"}}},
-            {"Sid": "AppendOnlyPairLedger", "Effect": "Allow",
-             "Action": ["dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem"],
-             "Resource": {"Fn::GetAtt": ["PairLedger", "Arn"]},
-             "Condition": {"ForAllValues:StringLike": {"dynamodb:LeadingKeys": ["PAIR#*"]},
-                           "Null": {"dynamodb:LeadingKeys": "false"}}},
-            {"Sid": "OwnLogsOnly", "Effect": "Allow", "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
-             "Resource": {"Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${ControllerLogs}:log-stream:*"}}
-          ]}
-        }]
+        "RoleName": {
+          "Fn::Sub": "${AWS::StackName}-pair-controller"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "PairControllerLeastPrivilege",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "RunOnlyReviewedDefinitions",
+                  "Effect": "Allow",
+                  "Action": "ecs:RunTask",
+                  "Resource": [
+                    {
+                      "Ref": "WorkerTaskDefinitionArn"
+                    },
+                    {
+                      "Ref": "ProxyTaskDefinitionArn"
+                    }
+                  ],
+                  "Condition": {
+                    "ArnEquals": {
+                      "ecs:cluster": {
+                        "Ref": "ClusterArn"
+                      }
+                    },
+                    "StringEquals": {
+                      "aws:RequestTag/bakata:purpose": "research-fixture"
+                    },
+                    "ForAllValues:StringEquals": {
+                      "aws:TagKeys": [
+                        "bakata:purpose",
+                        "bakata:role",
+                        "bakata:run",
+                        "bakata:until"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Sid": "NeverExecuteCommand",
+                  "Effect": "Deny",
+                  "Action": "ecs:RunTask",
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "ecs:enable-execute-command": "true"
+                    }
+                  }
+                },
+                {
+                  "Sid": "TagOnlyAtLaunch",
+                  "Effect": "Allow",
+                  "Action": "ecs:TagResource",
+                  "Resource": {
+                    "Fn::Sub": [
+                      "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task/${Name}/*",
+                      {
+                        "Name": {
+                          "Fn::Select": [
+                            1,
+                            {
+                              "Fn::Split": [
+                                ":cluster/",
+                                {
+                                  "Ref": "ClusterArn"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "ecs:CreateAction": "RunTask"
+                    }
+                  }
+                },
+                {
+                  "Sid": "ObserveAndStopResearchTasks",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecs:DescribeTasks",
+                    "ecs:StopTask"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": [
+                      "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task/${Name}/*",
+                      {
+                        "Name": {
+                          "Fn::Select": [
+                            1,
+                            {
+                              "Fn::Split": [
+                                ":cluster/",
+                                {
+                                  "Ref": "ClusterArn"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "Condition": {
+                    "ArnEquals": {
+                      "ecs:cluster": {
+                        "Ref": "ClusterArn"
+                      }
+                    },
+                    "StringEquals": {
+                      "ecs:ResourceTag/bakata:purpose": "research-fixture"
+                    }
+                  }
+                },
+                {
+                  "Sid": "ListOnlyResearchCluster",
+                  "Effect": "Allow",
+                  "Action": "ecs:ListTasks",
+                  "Resource": "*",
+                  "Condition": {
+                    "ArnEquals": {
+                      "ecs:cluster": {
+                        "Ref": "ClusterArn"
+                      }
+                    }
+                  }
+                },
+                {
+                  "Sid": "PassOnlyReviewedTaskRoles",
+                  "Effect": "Allow",
+                  "Action": "iam:PassRole",
+                  "Resource": [
+                    {
+                      "Ref": "WorkerTaskRoleArn"
+                    },
+                    {
+                      "Ref": "WorkerExecutionRoleArn"
+                    },
+                    {
+                      "Ref": "ProxyExecutionRoleArn"
+                    }
+                  ],
+                  "Condition": {
+                    "StringEquals": {
+                      "iam:PassedToService": "ecs-tasks.amazonaws.com"
+                    }
+                  }
+                },
+                {
+                  "Sid": "AppendOnlyPairLedger",
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:Query",
+                    "dynamodb:PutItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "PairLedger",
+                      "Arn"
+                    ]
+                  },
+                  "Condition": {
+                    "ForAllValues:StringLike": {
+                      "dynamodb:LeadingKeys": [
+                        "PAIR#*"
+                      ]
+                    },
+                    "Null": {
+                      "dynamodb:LeadingKeys": "false"
+                    }
+                  }
+                },
+                {
+                  "Sid": "OwnLogsOnly",
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${ControllerLogs}:log-stream:*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ControllerFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Condition": "PairControllerEnabled",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-pair-controller"
+        },
+        "Runtime": "python3.12",
+        "Architectures": [
+          "x86_64"
+        ],
+        "Handler": "intelligence.research_pair_handler.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "ControllerRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "CodeBucket"
+          },
+          "S3Key": {
+            "Ref": "CodeKey"
+          },
+          "S3ObjectVersion": {
+            "Ref": "CodeVersion"
+          }
+        },
+        "Timeout": 120,
+        "MemorySize": 128,
+        "ReservedConcurrentExecutions": 1,
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "ControllerLogs"
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "BAKATA_PAIR_CONTROLLER_ENABLED": "true",
+            "BAKATA_PAIR_LAUNCH_ENABLED": {
+              "Ref": "EnablePairLaunch"
+            },
+            "BAKATA_PAIR_TABLE": {
+              "Ref": "PairLedger"
+            },
+            "BAKATA_PAIR_NONCE": {
+              "Ref": "PairNonce"
+            },
+            "BAKATA_CLUSTER": {
+              "Ref": "ClusterArn"
+            },
+            "BAKATA_PROXY_DEFINITION": {
+              "Ref": "ProxyTaskDefinitionArn"
+            },
+            "BAKATA_WORKER_DEFINITION": {
+              "Ref": "WorkerTaskDefinitionArn"
+            },
+            "BAKATA_PROXY_SUBNET": {
+              "Ref": "ProxySubnet"
+            },
+            "BAKATA_PROXY_SECURITY_GROUP": {
+              "Ref": "ProxySecurityGroup"
+            },
+            "BAKATA_WORKER_SUBNET": {
+              "Ref": "WorkerSubnet"
+            },
+            "BAKATA_WORKER_SECURITY_GROUP": {
+              "Ref": "WorkerSecurityGroup"
+            }
+          }
+        }
+      }
+    },
+    "ControllerInvokeConfig": {
+      "Type": "AWS::Lambda::EventInvokeConfig",
+      "Condition": "PairControllerEnabled",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ControllerFunction"
+        },
+        "Qualifier": "$LATEST",
+        "MaximumRetryAttempts": 0,
+        "MaximumEventAgeInSeconds": 60
       }
     }
   },
   "Outputs": {
-    "ControllerRoleArn": {"Condition": "PairControllerEnabled", "Value": {"Fn::GetAtt": ["ControllerRole", "Arn"]}},
-    "PairLedgerName": {"Condition": "PairControllerEnabled", "Value": {"Ref": "PairLedger"}}
+    "ControllerRoleArn": {
+      "Condition": "PairControllerEnabled",
+      "Value": {
+        "Fn::GetAtt": [
+          "ControllerRole",
+          "Arn"
+        ]
+      }
+    },
+    "PairLedgerName": {
+      "Condition": "PairControllerEnabled",
+      "Value": {
+        "Ref": "PairLedger"
+      }
+    },
+    "ControllerFunctionName": {
+      "Condition": "PairControllerEnabled",
+      "Value": {
+        "Ref": "ControllerFunction"
+      }
+    }
   }
 }
