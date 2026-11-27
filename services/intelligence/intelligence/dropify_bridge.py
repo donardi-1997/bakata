@@ -1,7 +1,6 @@
 """Offline archive of bounded read-only connector snapshots. No supplier API."""
 from contextlib import closing
 from datetime import datetime, timezone, timedelta
-from decimal import Decimal
 import argparse
 import hashlib
 import json
@@ -86,6 +85,8 @@ class BridgeArchive:
             raise ValueError("Independent connection required")
         db.execute("PRAGMA busy_timeout=5000")
         db.execute("PRAGMA foreign_keys=ON")
+        if db.execute("PRAGMA foreign_keys").fetchone()[0]!=1:
+            raise ValueError("Foreign key enforcement unavailable")
         with db:
             db.execute("BEGIN IMMEDIATE")
             app,version=(db.execute("PRAGMA "+p).fetchone()[0] for p in ("application_id","user_version"))
@@ -193,6 +194,14 @@ class BridgeArchive:
                             (link_id,)+key+(evaluation_id,review["sha256"],self.encode(payload)))
         return payload
 
+    def links(self,key):
+        rows=self.db.execute("""SELECT id,evaluation_id,evaluation_sha,payload FROM score_links
+            WHERE store=? AND product_id=? AND at=? ORDER BY id LIMIT 101""",key).fetchall()
+        if len(rows)>100:
+            raise ValueError("Too many historical links")
+        return [dict(json.loads(payload),link_id=lid,evaluation_id=eid,evaluation_sha256=sha)
+                for lid,eid,sha,payload in rows]
+
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
@@ -208,16 +217,40 @@ def main():
     candidates.add_argument("--in-stock",action="store_true")
     candidates.add_argument("--limit",type=int,default=100)
     candidates.add_argument("--offset",type=int,default=0)
+    link=sub.add_parser("link-score")
+    link.add_argument("--commercial",type=Path,required=True)
+    link.add_argument("--link-id",required=True)
+    link.add_argument("--evaluation-id",required=True)
+    for command in (link,sub.add_parser("links")):
+        command.add_argument("--store",required=True)
+        command.add_argument("--product-id",required=True)
+        command.add_argument("--captured-at",required=True)
+    link.add_argument("--mapping-ref",required=True)
+    link.add_argument("--cost-ref",required=True)
+    link.add_argument("--actor-ref",required=True)
+    link.add_argument("--reviewed-cost-minor",required=True,type=int)
     args=parser.parse_args()
+    if args.command=="link-score" and (not args.commercial.is_file() or args.db.resolve()==args.commercial.resolve() or (args.db.exists() and args.db.samefile(args.commercial))):
+        parser.error("An existing distinct commercial archive is required")
     os.umask(0o077)
     with closing(sqlite3.connect(args.db,timeout=5)) as db:
         archive=BridgeArchive(db)
         if args.command=="ingest":
             with args.file.open("rb") as handle:
                 result=archive.ingest(handle.read(MAX_BYTES+1),args.operator,datetime.now(timezone.utc))
-        else:
+        elif args.command=="candidates":
             result=archive.candidates(store=args.store,query=args.query,category=args.category,
                                       in_stock=args.in_stock,limit=args.limit,offset=args.offset)
+        else:
+            key=(args.store,args.product_id,instant(datetime.fromisoformat(args.captured_at)).isoformat())
+            if args.command=="links":
+                result=archive.links(key)
+            else:
+                with closing(sqlite3.connect(args.commercial,timeout=5)) as commercial_db:
+                    commercial=CommercialStore(commercial_db)
+                    result=archive.link_score(args.link_id,key,commercial,args.evaluation_id,
+                        mapping_ref=args.mapping_ref,cost_ref=args.cost_ref,actor_ref=args.actor_ref,
+                        reviewed_cost_minor=args.reviewed_cost_minor,now=datetime.now(timezone.utc))
     print(json.dumps(result,ensure_ascii=False))
 
 
