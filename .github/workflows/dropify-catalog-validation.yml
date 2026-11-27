@@ -1,6 +1,7 @@
 name: Dropify catalog validation
 on:
   pull_request:
+    branches: [main]
     paths:
       - 'scripts/*dropify*'
       - 'tools/dropify-quarantine/**'
@@ -10,6 +11,10 @@ permissions:
   contents: read
 jobs:
   catalog-package:
+    # Independent from Foundation checks; manual packaging runs are not canceled.
+    concurrency:
+      group: dropify-catalog-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

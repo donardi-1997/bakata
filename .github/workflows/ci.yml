@@ -1,11 +1,17 @@
 name: Foundation checks
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
 permissions:
   contents: read
 jobs:
   checks:
+    # Supersede only obsolete PR checks; never interrupt a main validation or deployment.
+    concurrency:
+      group: foundation-checks-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     # Keep Playwright system dependencies on a stable supported LTS runner.
     runs-on: ubuntu-24.04
     timeout-minutes: 20
