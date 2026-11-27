@@ -10,6 +10,7 @@ COPY wp-config.php /opt/bakata/wp/wp-config.php
 COPY dropify-capture-page.php /opt/bakata/dropify-capture-page.php
 COPY run-fixture.sh /opt/bakata/run-fixture.sh
 COPY validate-request.php /opt/bakata/validate-request.php
+COPY catalog-egress-policy.php /opt/bakata/catalog-egress-policy.php
 RUN chmod 0555 /opt/bakata/run-fixture.sh && chmod -R a+rX /opt/bakata/wp
 RUN mkdir /exchange && chown 33:33 /exchange && chmod 0700 /exchange && chmod 1777 /tmp
 VOLUME ["/tmp","/exchange"]

@@ -78,6 +78,35 @@ add_filter('pre_http_request', static function ($pre, $args, $url) {
             update_option('bk_fixture_bad_request','1',false);
             return new WP_Error('bk_fixture_bad_request','Invalid paged fixture request.');
         }
+        // In the persistent rehearsal, validate the *actual* WP HTTP args
+        // against the pilot policy before returning the offline response.
+        if (getenv('BAKATA_RESEARCH_PERSIST')==='1') {
+            require_once '/opt/bakata/catalog-egress-policy.php';
+            $file=sprintf('/exchange/request-%04d.json',$count);
+            if (is_link($file) || !is_file($file) || filesize($file)>4096) {
+                update_option('bk_fixture_bad_request','1',false);
+                return new WP_Error('bk_fixture_scope','Missing fixture reservation.');
+            }
+            $request=json_decode(file_get_contents($file),true);
+            if (!is_array($request) || ($request['run']??null)!==BAKATA_DROPIFY_BATCH_RUN
+                || ($request['store']??null)!=='7' || ($request['page']??null)!==$count
+                || ($request['until']??null)!==BAKATA_DROPIFY_BATCH_UNTIL
+                || !is_int($request['reserved_at']??null) || $request['reserved_at']>time()
+                || time()-$request['reserved_at']>45
+                || !is_dir(sprintf('/exchange/claim-%04d',$count))) {
+                update_option('bk_fixture_bad_request','1',false);
+                return new WP_Error('bk_fixture_scope','Invalid fixture reservation.');
+            }
+            // Only the synthetic adapter maps its fixture identity to a pilot
+            // policy test identity; the original ledger/approval stays fixture.
+            $scope=['run'=>'pilot-rehearsal','store'=>'7','page'=>$count,
+                'until'=>$request['until'],'attempt'=>$request['attempt']??null];
+            if (!bakata_research_catalog_request_allowed($url,$args,$scope,'ci-only-token-canary',time())) {
+                update_option('bk_fixture_bad_request','1',false);
+                return new WP_Error('bk_fixture_policy','Pilot HTTP policy denied fixture.');
+            }
+            update_option('bk_fixture_policy_passes',(string)((int)get_option('bk_fixture_policy_passes',0)+1),false);
+        }
         $items=[];
         for ($i=0;$i<($count===1?10:3);$i++) {
             $id=1000+($count-1)*10+$i;

@@ -8,6 +8,8 @@ on:
       - 'infra/research-worker/**'
       - 'services/intelligence/intelligence/research_worker.py'
       - 'services/intelligence/intelligence/research_receipts.py'
+      - 'services/intelligence/intelligence/research_credentials.py'
+      - 'services/intelligence/intelligence/research_fixture_gate.py'
       - 'scripts/test-research-worker-persistence.py'
       - '.github/workflows/dropify-catalog-validation.yml'
   workflow_dispatch:
@@ -53,7 +55,7 @@ jobs:
       - name: Rehearse CLI-only Fargate-style research worker without external network
         run: |
           python3 -m venv /tmp/bk-worker-emulator
-          /tmp/bk-worker-emulator/bin/pip install 'moto[dynamodb,s3]>=5.1,<6' 'boto3>=1.36,<2'
+          /tmp/bk-worker-emulator/bin/pip install 'moto[dynamodb,s3,secretsmanager]>=5.1,<6' 'boto3>=1.36,<2'
           BAKATA_RESEARCH_TEST_PYTHON=/tmp/bk-worker-emulator/bin/python bash scripts/test-dropify-research-worker.sh /tmp/dropify-validation/original.zip /tmp/dropify-validation/dropify-catalog-validation.zip /tmp/dropify-validation/woocommerce.zip
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

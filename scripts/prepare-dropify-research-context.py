@@ -44,7 +44,7 @@ def prepare(original,candidate,woo,dest,expected):
     plugins.mkdir()
     extract(candidate,plugins,"wc-dropi-integration")
     extract(woo,plugins,"woocommerce")
-    for name in ("Dockerfile","wp-config.php","run-fixture.sh","validate-request.php"):
+    for name in ("Dockerfile","wp-config.php","run-fixture.sh","validate-request.php","catalog-egress-policy.php"):
         shutil.copyfile(ROOT/"infra/research-worker"/name,dest/name)
     shutil.copyfile(ROOT/"tools/dropify-quarantine/sandbox-fixture.php",dest/"sandbox-fixture.php")
     shutil.copyfile(ROOT/"scripts/dropify-capture-page.php",dest/"dropify-capture-page.php")

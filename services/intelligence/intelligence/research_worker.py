@@ -20,7 +20,7 @@ def wait_file(path,deadline,*,clock=time.time,sleep=time.sleep):
     raise ValueError("Fixture exchange timed out")
 
 
-def coordinate(exchange,receipts,plan,*,clock=time.time,sleep=time.sleep):
+def coordinate(exchange,receipts,plan,*,clock=time.time,sleep=time.sleep,credential_gate=None):
     plan_checked(plan)
     if plan["store"]!="7" or (plan["first"],plan["last"])!=(1,3):
         raise ValueError("Only the bounded synthetic fixture is supported")
@@ -43,6 +43,12 @@ def coordinate(exchange,receipts,plan,*,clock=time.time,sleep=time.sleep):
         if clock()>=deadline:
             raise ValueError("Task deadline reached")
         receipt=receipts.reserve(plan,page,now=int(clock()))
+        # Optional fixture rehearsal gate: read a pinned synthetic secret only
+        # after reservation and before publishing any IPC request.
+        if credential_gate is not None:
+            credential_gate(plan,receipt)
+            if clock()>=deadline or clock()-receipt["reserved_at"]>45:
+                raise ValueError("Authorization expired during credential check")
         request={"run":plan["run"],"store":"7","page":page,"attempt":receipt["attempt"],
                  "reserved_at":receipt["reserved_at"],"until":plan["until"]}
         # No output or retry if reservation is ambiguous; durable marker first.
