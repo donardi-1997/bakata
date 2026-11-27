@@ -37,6 +37,7 @@ if [ "${BAKATA_RESEARCH_PERSIST:-}" = 1 ]; then
         mv "/exchange/.response-$key.tmp" "/exchange/response-$key.json"
     done
     test "$(wpcli option get bk_fixture_http_calls)" = 2
+    test "$(wpcli option get bk_fixture_policy_passes)" = 2
     wpcli eval 'foreach(["bk_fixture_unexpected_provider","bk_fixture_bad_request","bk_fixture_unsafe_hook"] as $key) if(get_option($key)!==false) throw new RuntimeException("Unexpected fixture behavior"); if(wp_count_posts("product")->publish || wp_count_posts("product")->draft || wc_orders_count("processing")) throw new RuntimeException("Unexpected mutation");' >&2
     printf '{"run":"%s","calls":2}' "$BAKATA_RESEARCH_RUN" > /exchange/.done.tmp
     mv /exchange/.done.tmp /exchange/done.json

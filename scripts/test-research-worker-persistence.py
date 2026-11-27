@@ -11,6 +11,8 @@ from moto import mock_aws
 from intelligence.dropify_capture import policy
 from intelligence.research_receipts import ResearchReceipts
 from intelligence.research_worker import coordinate
+from intelligence.research_credentials import SecretBinding,SCHEMA
+from intelligence.research_fixture_gate import FixtureCredentialGate
 
 
 def main():
@@ -35,7 +37,12 @@ def main():
         s3.create_bucket(Bucket=bucket)
         s3.put_bucket_versioning(Bucket=bucket,VersioningConfiguration={"Status":"Enabled"})
         r=ResearchReceipts(ddb,s3,table=table,bucket=bucket)
-        result=coordinate(exchange,r,plan)
+        sm=boto3.client("secretsmanager",**options)
+        secret=sm.create_secret(Name="bakata/research/dropify/fixture-ci",
+            SecretString=json.dumps({"schema":SCHEMA,"store_id":"7","token":"ci-only-token-canary"}))
+        arn=secret["ARN"]
+        gate=FixtureCredentialGate(sm,SecretBinding(arn,secret["VersionId"],arn.split(":")[4],"7"))
+        result=coordinate(exchange,r,plan,credential_gate=gate)
         assert result=={"state":"terminal-page-observed","pages":2,"rows":13,"coverage_verified":False,"provider_queries":0}
         for page in (1,2):
             receipt=r.status(plan,page)["page"]
@@ -43,6 +50,8 @@ def main():
             raw,digest,version=r._read_evidence(receipt["object_key"],receipt["attempt"],receipt["version_id"])
             assert b"canary" not in raw and digest==receipt["sha256"] and version==receipt["version_id"]
         assert r.status(plan,3)["page"] is None
+        for file in Path(exchange).glob("*.json"):
+            assert b"ci-only-token-canary" not in file.read_bytes()
         assert len(s3.list_object_versions(Bucket=bucket)["Versions"])==2
         try:
             coordinate(exchange,r,plan)
