@@ -70,7 +70,8 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await asyncio.wait_for(r.readexactly(26),2),b"opaque synthetic TLS bytes")
             await self.finish(w)
         r,w=await self.connect()
-        self.assertIn(b"503",await asyncio.wait_for(r.read(),2))
+        self.assertEqual(await asyncio.wait_for(r.readuntil(b"\r\n\r\n"),2),
+                         b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
         await self.finish(w)
         self.assertEqual(self.dial.await_count,MAX_ATTEMPTS)
 
@@ -92,11 +93,34 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
         r,w=await self.connect()
         await asyncio.wait_for(r.readuntil(b"\r\n\r\n"),2)
         other,other_w=await self.connect()
-        self.assertIn(b"503",await asyncio.wait_for(other.read(),2))
+        self.assertEqual(await asyncio.wait_for(other.readuntil(b"\r\n\r\n"),2),
+                         b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
         other_w.close()
         await other_w.wait_closed()
         await self.finish(w)
         self.assertEqual(self.dial.await_count,1)
+
+    async def test_rejected_header_cannot_become_authorized(self):
+        r,w=await self.connect()
+        await asyncio.wait_for(r.readuntil(b"\r\n\r\n"),2)
+        denied,denied_w=await asyncio.open_connection("127.0.0.1",self.port)
+        try:
+            for _ in range(100):
+                if self.proxy.rejecting:
+                    break
+                await asyncio.sleep(.005)
+            self.assertTrue(self.proxy.rejecting)
+            await self.finish(w)
+            self.assertFalse(self.proxy.active)
+            denied_w.write(GOOD)
+            await denied_w.drain()
+            self.assertIn(b"503 Service Unavailable",await asyncio.wait_for(denied.readuntil(b"\r\n\r\n"),2))
+            self.assertEqual(self.dial.await_count,1)
+            self.assertEqual(self.proxy.attempts,1)
+        finally:
+            denied_w.close()
+            await denied_w.wait_closed()
+            await self.finish(w)
 
     async def test_failed_dial_no_retry(self):
         self.dial.side_effect=OSError("synthetic failure")

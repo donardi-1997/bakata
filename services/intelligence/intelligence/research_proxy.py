@@ -75,6 +75,7 @@ class PilotProxy:
         self.dial=dial
         self.clock=clock
         self.active=False
+        self.rejecting=False
         self.attempts=0
 
     async def handle(self,reader,writer):
@@ -85,8 +86,20 @@ class PilotProxy:
             # No waiting queue or concurrent tunnels. The counter is per process,
             # not a replacement for durable per-page reservations.
             if self.active or self.attempts>=MAX_ATTEMPTS or self.clock()>=self.until:
-                writer.write(b"HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n")
-                await asyncio.wait_for(writer.drain(),1)
+                # This connection is denied permanently, even if the active
+                # tunnel finishes while we read its header. Consume at most one
+                # bounded header before replying: closing a TCP socket with
+                # unread input can reset the connection and discard the 503.
+                if self.rejecting:
+                    return
+                self.rejecting=True
+                try:
+                    raw=await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"),1)
+                    parse_connect(raw)
+                    writer.write(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                    await asyncio.wait_for(writer.drain(),1)
+                finally:
+                    self.rejecting=False
                 return
             self.active=True
             acquired=True
