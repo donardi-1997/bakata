@@ -1,0 +1,13 @@
+# INT-18 — Censo de catálogo y actualización
+
+Depende del PR #71. Eleva el límite de numeración de página a 2000 (hasta 20.000 filas de 10) en proyección PHP, consumidor CLI, archivo Python, revisión de catálogo y radar. Cada autorización continúa limitada a 10 páginas, 30 minutos y pausa mínima de 10 segundos. No es permiso para ejecutar 2000 llamadas. El archivo permite hasta 20.000 páginas archivadas, 100.000 observaciones y 320 MiB de archivo principal; no elimina historial automáticamente.
+
+Usar el capturador de #71 por ventanas contiguas con ID único, misma tienda, mismo archivo y wrapper. Tras cada ventana, auditar todas las carpetas en orden:
+
+    python3 -m intelligence.dropify_census --db /privado/bridge.sqlite /privado/capture-001 /privado/capture-011
+
+La función revisa manifiestos, marcadores, páginas, digests y observaciones archivadas. Detecta huecos, duplicados y orden no creciente incluso entre ventanas. Informa cantidad de IDs únicos, stock positivo/cero/desconocido y siguiente página posible. Una respuesta parcial o vacía termina el recorrido observado; no certifica cobertura, ni el total de Dropify ni una fotografía simultánea. No continuar si aparece una reserva incierta; reconciliar primero. El límite de 2000 páginas es una cota revisable, no un total real. No se activa cron, ni se autorizan automáticamente ventanas posteriores.
+
+Prueba CI sintética: 9999 productos, 1000 páginas, 100 ventanas, captura/archivo reales en memoria, reloj simulado (sin esperas reales), auditoría de censo. Pruebas adicionales de solapamiento entre ventanas, huecos y archivo incompleto. No mide rendimiento real del servidor ni consulta al proveedor.
+
+Propuesta operativa (aún no activa): primero piloto real de 2–3 páginas en staging aislado y autorizado; luego ventana de 10; ampliar según latencia, errores, 429 y autorización del proveedor. Censo inicial por ventanas hasta respuesta terminal observada. Repetir con nuevos IDs de autorización y workspace; mantener observaciones históricas y usar radar para diferencias en precios/stock. Sin endpoint de cambios confirmado, no asumir que existe una actualización incremental remota: para revisar todos los productos se necesita otro recorrido, y los candidatos prioritarios podrían refrescarse más frecuentemente solo si se verifica búsqueda por ID/SKU. Frecuencia inicial a evaluar: censo semanal y revisión diaria de candidatos, sujeta a resultados y límites del proveedor. No inferir retiradas de productos ausentes de un recorrido. Antes de activar tareas, revisar almacenamiento, retención, seguridad de Dropify, aislamiento, presupuesto de llamadas y comportamiento real. No realizar importaciones ni pedidos.
