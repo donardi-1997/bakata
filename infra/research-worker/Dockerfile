@@ -9,9 +9,10 @@ COPY sandbox-fixture.php /opt/bakata/wp/wp-content/mu-plugins/sandbox-fixture.ph
 COPY wp-config.php /opt/bakata/wp/wp-config.php
 COPY dropify-capture-page.php /opt/bakata/dropify-capture-page.php
 COPY run-fixture.sh /opt/bakata/run-fixture.sh
+COPY validate-request.php /opt/bakata/validate-request.php
 RUN chmod 0555 /opt/bakata/run-fixture.sh && chmod -R a+rX /opt/bakata/wp
-RUN chmod 1777 /tmp
-VOLUME ["/tmp"]
+RUN mkdir /exchange && chown 33:33 /exchange && chmod 0700 /exchange && chmod 1777 /tmp
+VOLUME ["/tmp","/exchange"]
 ENV HOME=/tmp WP_CLI_CACHE_DIR=/tmp/wp-cli-cache BAKATA_DROPIFY_SANDBOX=1
 USER 33:33
 ENTRYPOINT ["/bin/sh","/opt/bakata/run-fixture.sh"]

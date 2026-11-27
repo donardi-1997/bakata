@@ -18,6 +18,8 @@ cleanup() {
   docker rm -fv "$worker" "$db" >/dev/null 2>&1 || true
   docker network rm "$net" >/dev/null 2>&1 || true
   docker image rm "$image" >/dev/null 2>&1 || true
+  # The fixture coordinator runs as UID 33, so remove its private exchange as root.
+  if [[ -d "$temp/exchange" ]]; then sudo -n rm -rf -- "$temp/exchange"; fi
   rm -rf -- "$temp"
 }
 trap cleanup EXIT
@@ -76,3 +78,40 @@ with sqlite3.connect(sys.argv[2]) as db:
     assert sum(archive.ingest(x,"ci-research",now)["inserted"] for x in raw)==0
 print("CLI-only research worker: 13 distinct synthetic products, localhost DB, immutable root and no commercial mutations.")
 PY
+
+# Separate fresh database for the persistent fixture; no real AWS network.
+docker rm -fv "$worker" "$db" >/dev/null
+docker run -d --pull=never --name "$db" --network "$net" --memory 512m --cpus .5 \
+  -e MARIADB_DATABASE=fixture -e MARIADB_USER=fixture -e MARIADB_PASSWORD=ci-research-only \
+  -e MARIADB_ROOT_PASSWORD=ci-research-root-only mariadb:11.4 >/dev/null
+for i in $(seq 1 60); do
+  if docker exec "$db" healthcheck.sh --connect --innodb_initialized >/dev/null 2>&1; then break; fi
+  test "$i" -lt 60
+  sleep 2
+done
+# Match the reviewed ECS UID/GID; do not relax 0600 files to make CI pass.
+chmod 0711 "$temp"
+mkdir "$temp/exchange" "$temp/coordinator-test"
+chmod 0755 "$temp/coordinator-test"
+sudo -n chown 33:33 "$temp/exchange"
+sudo -n chmod 0700 "$temp/exchange"
+cp -R "$repo/services/intelligence/intelligence" "$temp/coordinator-test/intelligence"
+cp "$repo/scripts/test-research-worker-persistence.py" "$temp/coordinator-test/test.py"
+chmod -R a+rX "$temp/coordinator-test"
+run=fixture-persistent-ci
+expiry=$(($(date +%s)+300))
+docker run -d --name "$worker" "${common[@]}" \
+  -v "$temp/exchange:/exchange" -e BAKATA_RESEARCH_PERSIST=1 \
+  -e "BAKATA_RESEARCH_RUN=$run" -e "BAKATA_RESEARCH_UNTIL=$expiry" "$image" >/dev/null
+# Docker orchestration stays with the hosted runner. The coordinator only
+# needs its private exchange and the local in-process AWS emulator.
+if ! timeout 210 sudo -n -u '#33' -g '#33' -- env \
+  GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted AWS_EC2_METADATA_DISABLED=true \
+  PYTHONPATH="$temp/coordinator-test" \
+  "${BAKATA_RESEARCH_TEST_PYTHON:?Test-only emulator Python required}" \
+  "$temp/coordinator-test/test.py" "$temp/exchange" "$run" "$expiry"; then
+  docker logs "$worker" >&2 || true
+  exit 1
+fi
+test "$(timeout 30 docker wait "$worker")" = 0
+docker logs "$worker" >&2

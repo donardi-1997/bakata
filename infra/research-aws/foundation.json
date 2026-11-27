@@ -22,6 +22,20 @@
       "Default": "",
       "AllowedPattern": "^$|^sha256:[0-9a-f]{64}$",
       "Description": "Reviewed MariaDB image already mirrored to stack DB ECR repository."
+    },
+    "EnableFixturePersistence": {
+      "Type": "String",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Default": "false",
+      "Description": "Opt-in persistent synthetic task definition only; no task launch."
+    },
+    "CoordinatorImageDigest": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^sha256:[0-9a-f]{64}$"
     }
   },
   "Rules": {
@@ -67,6 +81,44 @@
           "AssertDescription": "Both reviewed image digests are required for fixture networking."
         }
       ]
+    },
+    "PersistenceRequiresNetwork": {
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "EnableFixturePersistence"
+          },
+          "true"
+        ]
+      },
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Equals": [
+              {
+                "Ref": "EnableFixtureNetwork"
+              },
+              "true"
+            ]
+          },
+          "AssertDescription": "Private fixture network is required."
+        },
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Equals": [
+                  {
+                    "Ref": "CoordinatorImageDigest"
+                  },
+                  ""
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Reviewed coordinator digest required."
+        }
+      ]
     }
   },
   "Conditions": {
@@ -76,6 +128,21 @@
           "Ref": "EnableFixtureNetwork"
         },
         "true"
+      ]
+    },
+    "PersistentFixtureEnabled": {
+      "Fn::And": [
+        {
+          "Condition": "FixtureNetworkEnabled"
+        },
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "EnableFixturePersistence"
+            },
+            "true"
+          ]
+        }
       ]
     }
   },
@@ -406,6 +473,65 @@
               "Resource": {
                 "Fn::Sub": "arn:${AWS::Partition}:s3:::prod-${AWS::Region}-starport-layer-bucket/*"
               }
+            },
+            {
+              "Fn::If": [
+                "PersistentFixtureEnabled",
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${EvidenceBucket.Arn}/fixture-research/v1/7/*"
+                  },
+                  "Principal": "*",
+                  "Condition": {
+                    "ArnEquals": {
+                      "aws:PrincipalArn": {
+                        "Fn::GetAtt": [
+                          "FixtureTaskRole",
+                          "Arn"
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "Ref": "AWS::NoValue"
+                }
+              ]
+            },
+            {
+              "Fn::If": [
+                "PersistentFixtureEnabled",
+                {
+                  "Effect": "Allow",
+                  "Action": "s3:PutObject",
+                  "Resource": {
+                    "Fn::Sub": "${EvidenceBucket.Arn}/fixture-research/v1/7/*"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "s3:if-none-match": "*",
+                      "s3:x-amz-server-side-encryption": "AES256"
+                    },
+                    "ArnEquals": {
+                      "aws:PrincipalArn": {
+                        "Fn::GetAtt": [
+                          "FixtureTaskRole",
+                          "Arn"
+                        ]
+                      }
+                    }
+                  },
+                  "Principal": "*"
+                },
+                {
+                  "Ref": "AWS::NoValue"
+                }
+              ]
             }
           ]
         }
@@ -462,6 +588,12 @@
                     {
                       "Fn::GetAtt": [
                         "DatabaseRepository",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "CoordinatorRepository",
                         "Arn"
                       ]
                     }
@@ -698,6 +830,396 @@
         ]
       },
       "Condition": "FixtureNetworkEnabled"
+    },
+    "CoordinatorRepository": {
+      "Type": "AWS::ECR::Repository",
+      "Properties": {
+        "ImageTagMutability": "IMMUTABLE",
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true
+        },
+        "EncryptionConfiguration": {
+          "EncryptionType": "AES256"
+        },
+        "EmptyOnDelete": false
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "FixtureTaskRole": {
+      "Type": "AWS::IAM::Role",
+      "Condition": "PersistentFixtureEnabled",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                },
+                "ArnLike": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:*"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "FixturePartitionAndObjects",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:ConditionCheckItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "CaptureLedger",
+                      "Arn"
+                    ]
+                  },
+                  "Condition": {
+                    "ForAllValues:StringEquals": {
+                      "dynamodb:LeadingKeys": [
+                        "FIXTURE#STORE#7"
+                      ]
+                    },
+                    "Null": {
+                      "dynamodb:LeadingKeys": "false"
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${EvidenceBucket.Arn}/fixture-research/v1/7/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "s3:PutObject",
+                  "Resource": {
+                    "Fn::Sub": "${EvidenceBucket.Arn}/fixture-research/v1/7/*"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "s3:if-none-match": "*",
+                      "s3:x-amz-server-side-encryption": "AES256"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "DynamoEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Condition": "PersistentFixtureEnabled",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ResearchVpc"
+        },
+        "VpcEndpointType": "Gateway",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"
+        },
+        "RouteTableIds": [
+          {
+            "Ref": "ResearchRoutes"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:GetItem",
+                "dynamodb:PutItem",
+                "dynamodb:ConditionCheckItem"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "CaptureLedger",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "ForAllValues:StringEquals": {
+                  "dynamodb:LeadingKeys": [
+                    "FIXTURE#STORE#7"
+                  ]
+                },
+                "Null": {
+                  "dynamodb:LeadingKeys": "false"
+                },
+                "ArnEquals": {
+                  "aws:PrincipalArn": {
+                    "Fn::GetAtt": [
+                      "FixtureTaskRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              "Principal": "*"
+            }
+          ]
+        }
+      }
+    },
+    "PersistentFixtureTask": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Condition": "PersistentFixtureEnabled",
+      "Properties": {
+        "Family": {
+          "Fn::Sub": "${AWS::StackName}-persistent-fixture"
+        },
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
+        "NetworkMode": "awsvpc",
+        "Cpu": "1024",
+        "Memory": "2048",
+        "RuntimePlatform": {
+          "CpuArchitecture": "X86_64",
+          "OperatingSystemFamily": "LINUX"
+        },
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "ExecutionRole",
+            "Arn"
+          ]
+        },
+        "EphemeralStorage": {
+          "SizeInGiB": 21
+        },
+        "Volumes": [
+          {
+            "Name": "scratch"
+          },
+          {
+            "Name": "database"
+          },
+          {
+            "Name": "exchange"
+          }
+        ],
+        "ContainerDefinitions": [
+          {
+            "Name": "database",
+            "Image": {
+              "Fn::Sub": "${DatabaseRepository.RepositoryUri}@${DatabaseImageDigest}"
+            },
+            "Essential": true,
+            "Cpu": 256,
+            "Memory": 512,
+            "Environment": [
+              {
+                "Name": "MARIADB_DATABASE",
+                "Value": "fixture"
+              },
+              {
+                "Name": "MARIADB_USER",
+                "Value": "fixture"
+              },
+              {
+                "Name": "MARIADB_PASSWORD",
+                "Value": "ci-research-only"
+              },
+              {
+                "Name": "MARIADB_ROOT_PASSWORD",
+                "Value": "ci-research-root-only"
+              }
+            ],
+            "MountPoints": [
+              {
+                "SourceVolume": "database",
+                "ContainerPath": "/var/lib/mysql",
+                "ReadOnly": false
+              }
+            ],
+            "HealthCheck": {
+              "Command": [
+                "CMD-SHELL",
+                "healthcheck.sh --connect --innodb_initialized"
+              ],
+              "Interval": 10,
+              "Timeout": 5,
+              "Retries": 6,
+              "StartPeriod": 30
+            },
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "WorkerLogs"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
+                "awslogs-stream-prefix": "db"
+              }
+            }
+          },
+          {
+            "Name": "worker",
+            "Image": {
+              "Fn::Sub": "${WorkerRepository.RepositoryUri}@${WorkerImageDigest}"
+            },
+            "Essential": false,
+            "Cpu": 512,
+            "Memory": 768,
+            "User": "33:33",
+            "ReadonlyRootFilesystem": true,
+            "LinuxParameters": {
+              "Capabilities": {
+                "Drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "DependsOn": [
+              {
+                "ContainerName": "database",
+                "Condition": "HEALTHY"
+              }
+            ],
+            "Environment": [
+              {
+                "Name": "BAKATA_RESEARCH_FIXTURE",
+                "Value": "1"
+              },
+              {
+                "Name": "BAKATA_RESEARCH_PERSIST",
+                "Value": "1"
+              }
+            ],
+            "MountPoints": [
+              {
+                "SourceVolume": "scratch",
+                "ContainerPath": "/tmp",
+                "ReadOnly": false
+              },
+              {
+                "SourceVolume": "exchange",
+                "ContainerPath": "/exchange",
+                "ReadOnly": false
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "WorkerLogs"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
+                "awslogs-stream-prefix": "fixture"
+              }
+            }
+          },
+          {
+            "Name": "coordinator",
+            "Image": {
+              "Fn::Sub": "${CoordinatorRepository.RepositoryUri}@${CoordinatorImageDigest}"
+            },
+            "Essential": true,
+            "Cpu": 256,
+            "Memory": 512,
+            "User": "33:33",
+            "ReadonlyRootFilesystem": true,
+            "LinuxParameters": {
+              "Capabilities": {
+                "Drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "DependsOn": [
+              {
+                "ContainerName": "worker",
+                "Condition": "START"
+              }
+            ],
+            "Environment": [
+              {
+                "Name": "BAKATA_RESEARCH_FIXTURE",
+                "Value": "1"
+              },
+              {
+                "Name": "BAKATA_RESEARCH_PERSIST",
+                "Value": "1"
+              },
+              {
+                "Name": "BAKATA_LEDGER",
+                "Value": {
+                  "Ref": "CaptureLedger"
+                }
+              },
+              {
+                "Name": "BAKATA_EVIDENCE_BUCKET",
+                "Value": {
+                  "Ref": "EvidenceBucket"
+                }
+              },
+              {
+                "Name": "AWS_REGION",
+                "Value": {
+                  "Ref": "AWS::Region"
+                }
+              }
+            ],
+            "MountPoints": [
+              {
+                "SourceVolume": "exchange",
+                "ContainerPath": "/exchange",
+                "ReadOnly": false
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "WorkerLogs"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
+                "awslogs-stream-prefix": "coordinator"
+              }
+            }
+          }
+        ],
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "FixtureTaskRole",
+            "Arn"
+          ]
+        }
+      }
     }
   },
   "Outputs": {
@@ -748,6 +1270,20 @@
       "Condition": "FixtureNetworkEnabled",
       "Value": {
         "Ref": "WorkerSecurityGroup"
+      }
+    },
+    "CoordinatorRepositoryUri": {
+      "Value": {
+        "Fn::GetAtt": [
+          "CoordinatorRepository",
+          "RepositoryUri"
+        ]
+      }
+    },
+    "PersistentFixtureTaskArn": {
+      "Condition": "PersistentFixtureEnabled",
+      "Value": {
+        "Ref": "PersistentFixtureTask"
       }
     }
   }
