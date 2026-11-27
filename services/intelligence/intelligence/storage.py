@@ -33,6 +33,7 @@ SCHEMA = (
         url TEXT NOT NULL, observed_at TEXT NOT NULL, sha256 TEXT NOT NULL,
         approval_ref TEXT NOT NULL, approved_until TEXT NOT NULL,
         external_id TEXT, row_count INTEGER NOT NULL,
+        body_bytes INTEGER NOT NULL, manifest_sha256 TEXT,
         UNIQUE(source,url,observed_at)
     )""",
     """CREATE TABLE products (
@@ -144,9 +145,11 @@ class CommercialStore:
         if self.db.execute("SELECT COUNT(*) FROM "+table).fetchone()[0]+added>limit:
             raise ValueError("Archive capacity reached; review retention policy")
 
-    def ingest(self, registry, capture: Capture, *, now: datetime, external_id=None):
+    def ingest(self, registry, capture: Capture, *, now: datetime, external_id=None, manifest_sha256=None):
         """Reparse the reviewed capture, store metadata/hash, never raw response bytes."""
         now=instant(now)
+        if manifest_sha256 is not None and (not isinstance(manifest_sha256,str) or not re.fullmatch(r"[0-9a-f]{64}",manifest_sha256)):
+            raise ValueError("Invalid manifest digest")
         batch=import_capture(registry,capture,now=now,external_id=external_id)
         spec=registry.get(capture.source,now)
         if spec.kind is not SourceKind.JSON_LD and external_id is not None:
@@ -155,7 +158,7 @@ class CommercialStore:
         at=instant(ev.observed_at).isoformat()
         expiry=instant(spec.approved_until).isoformat()
         key=digest(encode([ev.source,ev.url,at]))
-        values=(key,ev.source,ev.url,at,ev.sha256,ev.approval_ref,expiry,external_id,len(batch.observations))
+        values=(key,ev.source,ev.url,at,ev.sha256,ev.approval_ref,expiry,external_id,len(batch.observations),len(capture.body),manifest_sha256)
         with self.transaction():
             source=self.db.execute("SELECT host,adapter FROM sources WHERE source=?",(ev.source,)).fetchone()
             if source is None:
@@ -168,7 +171,7 @@ class CommercialStore:
                     raise ValueError("Conflicting capture at same source, URL and time")
                 return key,0
             self._capacity("captures",MAX_CAPTURES)
-            self.db.execute("INSERT INTO captures VALUES (?,?,?,?,?,?,?,?,?)",values)
+            self.db.execute("INSERT INTO captures VALUES (?,?,?,?,?,?,?,?,?,?,?)",values)
             inserted=0
             available=MAX_OBSERVATIONS-self.db.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
             for row in batch.observations:
