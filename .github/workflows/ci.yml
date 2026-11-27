@@ -99,6 +99,15 @@ jobs:
         run: |
           npm --prefix qa install --ignore-scripts --no-audit --no-fund --package-lock=false
           qa/node_modules/.bin/playwright install --with-deps chromium
+      - name: Intelligence Dropify — catalog-only bridge contract
+        env:
+          PYTHONPATH: services/intelligence
+          BAKATA_BRIDGE_FIXTURE: '1'
+        run: |
+          php -l tools/dropify-quarantine/catalog-bridge.php
+          php scripts/test-dropify-catalog-bridge.php
+          python3 -m intelligence.dropify_bridge --db /tmp/bakata-dropify-bridge.sqlite ingest /tmp/bakata-dropify-bridge-fixture.json --operator ci-fixture
+          python3 -m intelligence.dropify_bridge --db /tmp/bakata-dropify-bridge.sqlite candidates --store 7 --in-stock | python3 -c 'import json,sys; rows=json.load(sys.stdin); assert len(rows)==1 and rows[0]["base_price"]=="7000.25" and rows[0]["sku"]=="025216"'
       - name: Intelligence Dropify — visible catalog export and offline archive
         env:
           PYTHONPATH: services/intelligence

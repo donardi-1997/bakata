@@ -7,6 +7,7 @@ import zipfile
 from pathlib import Path
 from dropify_security_patch import patch_security
 from dropify_hpos_patch import patch_hpos
+from dropify_catalog_patch import patch_catalog
 
 SHA = 'bf23c6b1c5dd640aab3d38e3f370a41fbd60139ac60a1ce5f0347a059e9b6700'
 ROOT = 'wc-dropi-integration/'
@@ -71,7 +72,7 @@ def patch(name, source):
     return patch_hpos(name, patch_security(name, source))
 
 
-def build(original, output):
+def build(original, output, *, catalog_only=False):
     if hashlib.sha256(original.read_bytes()).hexdigest() != SHA:
         raise ValueError('Only the audited Dropify 4.7.3 ZIP is supported')
     if original.resolve() == output.resolve():
@@ -84,9 +85,14 @@ def build(original, output):
                 name = item.filename[len(ROOT):]
                 text = data.decode('utf-8')
                 if '\r\n' in text:
-                    changed = patch(name, text.replace('\r\n', '\n')).replace('\n', '\r\n')
+                    changed = patch(name, text.replace('\r\n', '\n'))
+                    if catalog_only:
+                        changed = patch_catalog(name, changed)
+                    changed = changed.replace('\n', '\r\n')
                 else:
                     changed = patch(name, text)
+                    if catalog_only:
+                        changed = patch_catalog(name, changed)
                 data = changed.encode('utf-8')
             entries.append((item, data))
         with zipfile.ZipFile(output, 'x', zipfile.ZIP_DEFLATED) as dst:
@@ -98,5 +104,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('original', type=Path)
     parser.add_argument('output', type=Path)
+    parser.add_argument('--catalog-only', action='store_true', help='Experimental read-only catalog build; do not install automatically')
     args = parser.parse_args()
-    build(args.original, args.output)
+    build(args.original, args.output, catalog_only=args.catalog_only)

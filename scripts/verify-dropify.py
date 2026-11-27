@@ -11,11 +11,11 @@ REPO = Path(__file__).resolve().parent.parent
 SUITES = ('test-dropify-hardening.php', 'test-dropify-dispatch.php', 'test-dropify-hpos.php')
 
 
-def verify(original, php):
+def verify(original, php, catalog_only=False):
     with tempfile.TemporaryDirectory(prefix='bakata-dropify-') as temp:
         work = Path(temp)
         patched = work / 'patched.zip'
-        subprocess.run([sys.executable, str(REPO / 'scripts/harden-dropify.py'), str(original.resolve()), str(patched)], check=True)
+        subprocess.run([sys.executable, str(REPO / 'scripts/harden-dropify.py'), str(original.resolve()), str(patched)] + (['--catalog-only'] if catalog_only else []), check=True)
         with zipfile.ZipFile(patched) as archive:
             # Output is generated from the exact hash-pinned input archive.
             archive.extractall(work / 'source')
@@ -26,7 +26,7 @@ def verify(original, php):
         for path in files:
             subprocess.run([php, '-l', str(path)], check=True, stdout=subprocess.DEVNULL)
         print(f'{len(files)} PHP files linted', flush=True)
-        for suite in SUITES:
+        for suite in SUITES + (('test-dropify-catalog-bridge.php',) if catalog_only else ()):
             subprocess.run([php, str(REPO / 'scripts' / suite), str(root)], check=True)
     print('Cumulative offline validation passed; no plugin installed.', flush=True)
 
@@ -35,5 +35,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('original', type=Path)
     parser.add_argument('--php', default='php')
+    parser.add_argument('--catalog-only', action='store_true')
     args = parser.parse_args()
-    verify(args.original, args.php)
+    verify(args.original, args.php, args.catalog_only)
