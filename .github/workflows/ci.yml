@@ -18,6 +18,27 @@ jobs:
           docker compose -f services/intelligence/compose.yaml build fixture
           docker compose -f services/intelligence/compose.yaml run --rm -T fixture python -m unittest discover -s tests -v
           docker compose -f services/intelligence/compose.yaml run --rm -T fixture
+      - name: Intelligence jobs — persistent offline scheduler smoke
+        shell: bash
+        run: |
+          docker compose -f services/intelligence/compose.yaml --profile jobs config --quiet
+          docker compose -f services/intelligence/compose.yaml --profile jobs build scheduler
+          docker compose -f services/intelligence/compose.yaml run --rm -T scheduler enqueue ci-fixture --due 0
+          docker compose -f services/intelligence/compose.yaml run --rm -T scheduler run-once
+          docker compose -f services/intelligence/compose.yaml run --rm -T scheduler list | python3 -c 'import sys,json; rows=json.load(sys.stdin); assert len(rows)==1 and rows[0]["status"]=="succeeded" and rows[0]["attempts"]==1'
+          docker compose -f services/intelligence/compose.yaml run --rm -T scheduler result ci-fixture > /tmp/bakata-job-result.json
+          python3 -c 'import json; s=json.load(open("/tmp/bakata-job-result.json")); assert s["mode"]=="fixture" and s["rows"][0]["score_bp"]==7777'
+      - name: Intelligence release — runtime isolation and resource limits
+        shell: bash
+        run: |
+          mkdir -p qa/reports
+          docker compose -f services/intelligence/compose.yaml run --rm -T fixture python -m intelligence.release_probe | tee qa/reports/intelligence-fixture-runtime.json
+          docker compose -f services/intelligence/compose.yaml run --rm -T --entrypoint python scheduler -m intelligence.release_probe | tee qa/reports/intelligence-scheduler-runtime.json
+          docker compose -f services/intelligence/compose.yaml --profile jobs config --format json | python3 -c 'import sys,json; s=json.load(sys.stdin)["services"]; assert set(s)=={"fixture","scheduler"}; assert all(not x.get("ports") and not x.get("privileged") for x in s.values()); assert s["scheduler"]["profiles"]==["jobs"]'
+      - name: Intelligence preview — Python to PHP snapshot contract
+        run: |
+          docker compose -f services/intelligence/compose.yaml run --rm -T fixture python -m intelligence.admin_export > /tmp/bakata-intelligence-preview.json
+          docker run --rm -i -v "$PWD:/src:ro" php:8.3-cli php /src/scripts/test-intelligence-preview.php < /tmp/bakata-intelligence-preview.json
       - name: Validate PHP syntax
         run: docker run --rm -v "$PWD/wp-content:/src:ro" php:8.3-cli sh -c 'find /src -name "*.php" -exec php -l {} +'
       - name: Supplier foundation — isolated contract and preview tests
@@ -40,6 +61,7 @@ jobs:
           python3 -m py_compile scripts/upload-backup.py
           cp .env.example .env
           docker compose config --quiet
+          docker compose config --services | python3 -c 'import sys; assert not {"fixture","scheduler","intelligence"}.intersection(sys.stdin.read().splitlines())'
       - name: Validate design system tokens and assets
         run: python3 scripts/check_design_system.py
       - name: Bootstrap local store
@@ -71,6 +93,15 @@ jobs:
         run: |
           npm --prefix qa install --ignore-scripts --no-audit --no-fund --package-lock=false
           qa/node_modules/.bin/playwright install --with-deps chromium
+      - name: Browser QA — administrator intelligence preview
+        env:
+          BAKATA_CI_FIXTURES: '1'
+        run: |
+          export BAKATA_CI_INTELLIGENCE_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::$BAKATA_CI_INTELLIGENCE_PASSWORD"
+          docker compose run --rm -T cli wp user create ci-bakata-intelligence-reader intelligence-reader@example.test --role=subscriber --user_pass="$BAKATA_CI_INTELLIGENCE_PASSWORD" --porcelain
+          node --check qa/intelligence-admin.mjs
+          node qa/intelligence-admin.mjs
       - name: Browser QA — empty catalog
         env:
           BAKATA_CI_FIXTURES: '1'
@@ -172,6 +203,13 @@ jobs:
         run: |
           php -l scripts/test-draft-import-ci.php
           docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 cli wp eval "$(tail -n +2 scripts/test-draft-import-ci.php)"
+      - name: Intelligence draft bridge — isolated WooCommerce approval and import
+        env:
+          BAKATA_CI_FIXTURES: '1'
+        run: |
+          php -l scripts/test-intelligence-draft-ci.php
+          export BAKATA_CI_INTELLIGENCE_SNAPSHOT="$(cat /tmp/bakata-job-result.json)"
+          docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 -e BAKATA_CI_INTELLIGENCE_SNAPSHOT cli wp eval "$(tail -n +2 scripts/test-intelligence-draft-ci.php)"
       - name: Order preview — isolated WooCommerce CRUD tests
         env:
           BAKATA_CI_FIXTURES: '1'
@@ -215,7 +253,9 @@ jobs:
         run: docker compose logs --tail=100
       - name: Clean up
         if: always()
-        run: docker compose down -v
+        run: |
+          docker compose down -v
+          docker compose -f services/intelligence/compose.yaml --profile jobs down -v
   deploy_dev:
     needs: checks
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected && vars.BAKATA_CD_ENABLED == 'true'
