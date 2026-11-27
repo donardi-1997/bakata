@@ -45,6 +45,9 @@ try {
   assert.equal(catalogDeniedPost.status(),403);
   const deniedProfit=await restricted.request.post(base+'/wp-admin/admin-post.php',{form:{action:'bakata_profitability_clear'}});
   assert.equal(deniedProfit.status(),403);
+  const alertUrl=base+'/wp-admin/admin.php?page=bakata-alert-dashboard';
+  assert.equal((await rp.goto(alertUrl))?.status(),403);
+  assert.equal((await restricted.request.post(base+'/wp-admin/admin-post.php',{form:{action:'bakata_alert_dashboard_clear'}})).status(),403);
   await restricted.close();
   const admin=await context();
   const page=await login(admin,env.WP_ADMIN_USER,env.WP_ADMIN_PASSWORD);
@@ -103,6 +106,23 @@ try {
   await page.locator('#bk-catalog-file').setInputFiles('/tmp/bakata-catalog-review.json');
   await Promise.all([page.waitForURL(u=>u.searchParams.get('bk_catalog_notice')==='loaded'),page.locator('#bk_catalog_load').click()]);
   await page.getByText('Sin evaluación vinculada').waitFor();
+  await page.goto(alertUrl);
+  await page.getByRole('heading',{name:'Sin alertas cargadas'}).waitFor();
+  assert.equal((await admin.request.post(base+'/wp-admin/admin-post.php',{form:{action:'bakata_alert_dashboard_clear'}})).status(),403);
+  await page.locator('#bk-alert-file').setInputFiles('/tmp/bakata-alert-dashboard.json');
+  await Promise.all([page.waitForURL(u=>u.searchParams.get('bk_alert_notice')==='loaded'),page.locator('#bk_alert_load').click()]);
+  await page.getByRole('heading',{name:'Resumen de esta página'}).waitFor();
+  assert.equal(await page.locator('table.widefat tbody tr').count(),2);
+  assert.equal(await page.locator('table.widefat tbody script').count(),0);
+  await page.getByText('Fixture <script>unsafe</script>',{exact:true}).first().waitFor();
+  await page.locator('#bk_state').selectOption('resolved');
+  await Promise.all([page.waitForURL(u=>u.searchParams.get('bk_state')==='resolved'),page.locator('#bk_alert_filter').click()]);
+  assert.equal(await page.locator('table.widefat tbody tr').count(),1);
+  await page.getByText('Disminución de precio reportado',{exact:false}).waitFor();
+  await page.getByText('Ver procedencia',{exact:true}).click();
+  await page.screenshot({path:new URL('intelligence-alert-dashboard.png',reports).pathname,fullPage:true});
+  await Promise.all([page.waitForURL(u=>u.searchParams.get('bk_alert_notice')==='cleared'),page.locator('#bk_alert_clear').click()]);
+  await page.getByRole('heading',{name:'Sin alertas cargadas'}).waitFor();
   await admin.close();
   console.log('Intelligence administrator preview passed.');
 } finally {await browser.close();}

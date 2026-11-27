@@ -128,6 +128,13 @@ jobs:
         run: |
           python3 scripts/fixture-profitability-panel.py > /tmp/bakata-profitability.json
           php scripts/test-profitability-panel.php < /tmp/bakata-profitability.json
+      - name: Intelligence alert dashboard — ledger export and PHP validation
+        env:
+          PYTHONPATH: services/intelligence
+          BAKATA_CI_FIXTURES: '1'
+        run: |
+          python3 scripts/fixture-alert-dashboard.py > /tmp/bakata-alert-dashboard.json
+          php scripts/test-alert-dashboard.php < /tmp/bakata-alert-dashboard.json
       - name: Intelligence Dropify — visible catalog export and offline archive
         env:
           PYTHONPATH: services/intelligence
