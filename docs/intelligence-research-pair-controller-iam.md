@@ -1,6 +1,6 @@
 # INT-18H.3c.2d — Frontera IAM del controlador de par (plantilla durmiente)
 
-`infra/research-aws/pair-controller.json` declara, solo con `EnablePairController=true`, el ledger DynamoDB del par y el rol del controlador. No crea Lambda, programación, servicio ni definición de tarea: el controlador (`research_pair_controller.py`) aún usa un ledger SQLite local y necesita un adaptador DynamoDB antes de desplegarse. No se ha creado ningún stack.
+`infra/research-aws/pair-controller.json` declara, solo con `EnablePairController=true`, el ledger DynamoDB del par y el rol del controlador. No crea Lambda, programación, servicio ni definición de tarea. El controlador (`research_pair_controller.py`) puede usar este ledger mediante `research_pair_dynamo_ledger.py` (probado con Moto); falta el handler y su despliegue. No se ha creado ningún stack.
 
 ## Separación
 
@@ -14,7 +14,7 @@
 - `ecs:RunTask` solo sobre las dos definiciones revisadas, en el clúster revisado, con `bakata:purpose=research-fixture` y solo las claves de etiqueta `bakata:purpose|role|run|until`; denegado si se pide ECS Exec.
 - `ecs:TagResource` solo durante `RunTask`; `DescribeTasks`/`StopTask` solo en tareas del clúster con la etiqueta de propósito; `ListTasks` condicionado al clúster.
 - `iam:PassRole` solo para el task role del worker y los dos execution roles, y solo hacia `ecs-tasks.amazonaws.com`.
-- Ledger: `GetItem`, `Query`, `PutItem`, `ConditionCheckItem` en particiones `PAIR#*`; sin `UpdateItem` ni `DeleteItem`.
+- Ledger: `GetItem`, `Query`, `PutItem` en particiones `PAIR#*` (`TransactWriteItems` se autoriza como `PutItem` por ítem); sin `UpdateItem`, `DeleteItem` ni `ConditionCheckItem`.
 - Confianza: `lambda.amazonaws.com` con `aws:SourceAccount`. Sin políticas gestionadas ni `Path`.
 
 Las claves de condición usadas figuran en la Service Authorization Reference de ECS y DynamoDB para esas acciones (verificado en auditoría independiente, sin evaluación contra AWS).
@@ -38,7 +38,7 @@ Las claves de condición usadas figuran en la Service Authorization Reference de
 ## Límites
 
 - Pruebas estructurales: no evalúan políticas contra AWS ni permisos efectivos. Validar con IAM Access Analyzer o en un ensayo autorizado, incluido el comportamiento de `DescribeTasks` ante una tarea denegada.
-- `PutItem` puede sobrescribir un ítem: la inmutabilidad depende de expresiones condicionales del código.
+- `PutItem` puede sobrescribir un ítem: la inmutabilidad depende de las expresiones condicionales del adaptador (`attribute_not_exists` en cada escritura).
 - El nombre del rol `<stack>-pair-controller` limita el nombre del stack a 47 caracteres. Una Lambda futura debe configurar `LoggingConfig.LogGroup` hacia `ControllerLogs`: el rol no puede crear grupos de logs.
 - Las reglas no comprueban que los ARN de parámetros pertenezcan a la misma cuenta (si no, el permiso no casa y falla cerrado).
 - La tabla usa `Retain`, protección contra borrado y nombre fijo `<stack>-pair-ledger`: tiene costo bajo demanda, queda tras borrar el stack, y recrear un stack con el mismo nombre o cualquier cambio que exija reemplazar la tabla fallará (de forma segura) hasta resolver la tabla retenida. No se ha verificado si una restauración PITR conserva la política de recurso.

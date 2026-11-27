@@ -279,6 +279,7 @@ class PairControllerTests(unittest.TestCase):
         for down, last, desired in (("proxy", "STOPPED", "STOPPED"), ("worker", "STOPPED", "STOPPED"),
                                     ("worker", "STOPPING", "STOPPED")):
             with self.subTest(down=down, last=last):
+                self.tearDown()  # release the previous ledger before a fresh fixture
                 self.setUp()
                 try:
                     arns = dict(zip(("proxy", "worker"), self.launch_pair()))
@@ -404,6 +405,7 @@ class PairControllerTests(unittest.TestCase):
         ]
         for change, reason in cases:
             with self.subTest(change):
+                self.tearDown()  # release the previous ledger before a fresh fixture
                 self.setUp()
                 try:
                     proxy, worker = self.launch_pair()

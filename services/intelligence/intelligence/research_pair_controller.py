@@ -23,6 +23,7 @@ import json
 import re
 
 from .research_pair_contract import replay
+from .research_pair_dynamo_ledger import DynamoLedger
 from .research_pair_ledger import Conflict, Ledger
 
 ROLES = ("proxy", "worker")
@@ -107,7 +108,7 @@ class PairConfig:
 
 class PairController:
     def __init__(self, ledger, ecs, config, *, clock, enabled=False):
-        if not isinstance(ledger, Ledger) or not isinstance(config, PairConfig) or not callable(clock):
+        if not isinstance(ledger, (Ledger, DynamoLedger)) or not isinstance(config, PairConfig) or not callable(clock):
             raise ValueError("Reviewed ledger, configuration and clock required")
         self.ledger, self.ecs, self.config, self.clock = ledger, ecs, config, clock
         self.enabled = enabled is True

@@ -45,7 +45,7 @@ EXPECTED_STATEMENTS = {
         "Condition": {"StringEquals": {"iam:PassedToService": "ecs-tasks.amazonaws.com"}}},
     "AppendOnlyPairLedger": {
         "Effect": "Allow",
-        "Action": ["dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem", "dynamodb:ConditionCheckItem"],
+        "Action": ["dynamodb:GetItem", "dynamodb:Query", "dynamodb:PutItem"],
         "Resource": {"Fn::GetAtt": ["PairLedger", "Arn"]},
         "Condition": {"ForAllValues:StringLike": {"dynamodb:LeadingKeys": ["PAIR#*"]},
                       "Null": {"dynamodb:LeadingKeys": "false"}}},
