@@ -28,6 +28,11 @@ def verify(original, php, catalog_only=False):
         print(f'{len(files)} PHP files linted', flush=True)
         for suite in SUITES + (('test-dropify-catalog-bridge.php',) if catalog_only else ()):
             subprocess.run([php, str(REPO / 'scripts' / suite), str(root)], check=True)
+        if catalog_only:
+            for scenario in ('ok','page2','production','get','denied','nonce','expired','scope','host','missing',
+                             'db-failure','transport','403','429','302','malformed','oversized','cardinality'):
+                subprocess.run([php, str(REPO / 'scripts/test-dropify-catalog-operational.php'), str(root), scenario],
+                               check=True, timeout=10)
     print('Cumulative offline validation passed; no plugin installed.', flush=True)
 
 
