@@ -64,6 +64,7 @@ class LauncherTests(unittest.TestCase):
         self.ecs.run_task.assert_called_once()
         args = self.ecs.run_task.call_args.kwargs
         self.assertEqual(args["count"], 1)
+        self.assertEqual(args["platformVersion"], "1.4.0")
         self.assertEqual(args["taskDefinition"], self.config.definition)
         self.assertFalse(args["enableExecuteCommand"])
         self.assertEqual(args["networkConfiguration"]["awsvpcConfiguration"], {

@@ -1,4 +1,4 @@
-"""Real loopback TLS handshakes; ephemeral test certs, no provider."""
+"""Loopback TLS with ephemeral certs. X509 strict is enabled on the client only."""
 import asyncio
 import hashlib
 from pathlib import Path
@@ -23,7 +23,8 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
             subprocess.run(["openssl", *args], cwd=cls.path, check=True,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         openssl("req","-x509","-newkey","rsa:2048","-nodes","-keyout","ca.key",
-                "-out","ca.pem","-subj","/CN=fixture CA","-days","1")
+                "-out","ca.pem","-subj","/CN=fixture CA","-days","1",
+                "-addext","keyUsage=critical,keyCertSign,cRLSign")
         for name in ("server","worker","other"):
             openssl("req","-newkey","rsa:2048","-nodes","-keyout",name+".key",
                     "-out",name+".csr","-subj","/CN="+name)
@@ -44,7 +45,17 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         self.proxy=PilotProxy(until=int(time.time())+120,resolve=self.resolve,dial=self.dial)
         ctx=server_context(cert=str(self.path/"server.pem"),key=str(self.path/"server.key"),
                            ca=str(self.path/"ca.pem"))
-        self.server=await asyncio.start_server(authenticated_handler(self.proxy,self.pin),"127.0.0.1",0,
+        self.server_ctx=ctx
+        self.assertEqual(ctx.verify_mode,ssl.CERT_REQUIRED)
+        self.handled=asyncio.Event()
+        self.peer_pin=None
+        handler=authenticated_handler(self.proxy,self.pin)
+        async def observed(reader,writer):
+            peer=writer.get_extra_info("ssl_object").getpeercert(binary_form=True)
+            self.peer_pin=hashlib.sha256(peer).hexdigest()
+            self.handled.set()
+            await handler(reader,writer)
+        self.server=await asyncio.start_server(observed,"127.0.0.1",0,
                                                 ssl=ctx,ssl_handshake_timeout=2)
         self.port=self.server.sockets[0].getsockname()[1]
 
@@ -53,18 +64,30 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
         await self.server.wait_closed()
         await asyncio.sleep(.05)
 
-    async def request(self,name=None,hostname="proxy.fixture.invalid"):
+    def client_context(self,name=None,*,tls12=False):
         ctx=ssl.create_default_context(cafile=str(self.path/"ca.pem"))
+        ctx.verify_flags |= ssl.VERIFY_X509_STRICT
+        if tls12:
+            ctx.maximum_version=ssl.TLSVersion.TLSv1_2
         if name:
             ctx.load_cert_chain(str(self.path/(name+".pem")),str(self.path/(name+".key")))
+        return ctx
+
+    async def request(self,name,hostname="proxy.fixture.invalid"):
+        ctx=self.client_context(name)
         writer=None
+        stage="handshake"
         try:
             reader,writer=await asyncio.open_connection("127.0.0.1",self.port,ssl=ctx,server_hostname=hostname)
+            stage="request"
             writer.write(GOOD)
             await writer.drain()
             await asyncio.wait_for(reader.read(),3)
-        except (OSError,ssl.SSLError,ConnectionError):
-            pass
+        except (OSError,ssl.SSLError,ConnectionError) as exc:
+            code=getattr(exc,"verify_code",None)
+            raise self.failureException(
+                f"Positive TLS {stage} failed: {type(exc).__name__}, verify_code={code}"
+            ) from None
         finally:
             if writer:
                 writer.close()
@@ -73,14 +96,66 @@ class AuthTests(unittest.IsolatedAsyncioTestCase):
                 except (OSError,ssl.SSLError,ConnectionError):
                     pass
 
-    async def test_only_pinned_client_reaches_proxy(self):
-        await self.request("other")
-        await self.request()
-        await self.request("worker","wrong.fixture.invalid")
+    def assert_no_proxy_activity(self):
         self.resolve.assert_not_awaited()
         self.dial.assert_not_awaited()
         self.assertEqual(self.proxy.attempts,0)
+
+    async def test_wrong_hostname_is_certificate_verification_failure(self):
+        with self.assertRaises(ssl.SSLCertVerificationError) as error:
+            await asyncio.open_connection("127.0.0.1",self.port,
+                ssl=self.client_context("worker"),server_hostname="wrong.fixture.invalid")
+        self.assertEqual(error.exception.verify_code,62)  # OpenSSL hostname mismatch
+        self.assert_no_proxy_activity()
+
+    async def test_missing_client_certificate_fails_tls(self):
+        # Memory BIOs expose the server error reliably even when asyncio resets
+        # the client connection without surfacing the TLS alert.
+        ci,co,si,so=(ssl.MemoryBIO() for _ in range(4))
+        client=self.client_context(tls12=True).wrap_bio(ci,co,server_hostname="proxy.fixture.invalid")
+        server=self.server_ctx.wrap_bio(si,so,server_side=True)
+        reason=None
+        for _ in range(20):
+            try:
+                client.do_handshake()
+            except ssl.SSLWantReadError:
+                pass
+            except ssl.SSLError:
+                break
+            si.write(co.read())
+            try:
+                server.do_handshake()
+            except ssl.SSLWantReadError:
+                pass
+            except ssl.SSLError as exc:
+                reason=exc.reason
+                break
+            ci.write(so.read())
+        self.assertEqual(reason,"PEER_DID_NOT_RETURN_A_CERTIFICATE")
+        # TLS 1.2 makes rejection occur before open_connection returns.
+        with self.assertRaises((ConnectionResetError,ssl.SSLError)):
+            await asyncio.open_connection("127.0.0.1",self.port,
+                ssl=self.client_context(tls12=True),server_hostname="proxy.fixture.invalid")
+        self.assertFalse(self.handled.is_set())
+        self.assert_no_proxy_activity()
+
+    async def test_valid_but_unpinned_client_reaches_auth_not_proxy(self):
+        reader,writer=await asyncio.open_connection("127.0.0.1",self.port,
+            ssl=self.client_context("other"),server_hostname="proxy.fixture.invalid")
+        try:
+            await asyncio.wait_for(self.handled.wait(),3)
+            other=ssl.PEM_cert_to_DER_cert((self.path/"other.pem").read_text())
+            self.assertEqual(self.peer_pin,hashlib.sha256(other).hexdigest())
+            self.assertNotEqual(self.peer_pin,self.pin)
+            self.assertEqual(await asyncio.wait_for(reader.read(),3),b"")
+            self.assert_no_proxy_activity()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    async def test_pinned_client_reaches_proxy(self):
         await self.request("worker")
+        self.assertTrue(self.handled.is_set())
         self.resolve.assert_awaited_once()
         self.dial.assert_awaited_once()
         self.assertEqual(self.proxy.attempts,1)
