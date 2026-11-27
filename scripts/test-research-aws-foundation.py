@@ -24,7 +24,7 @@ class FoundationTests(unittest.TestCase):
         self.assertFalse(forbidden & {r["Type"] for r in self.r.values()})
         for name,r in self.r.items():
             if r["Type"].startswith("AWS::EC2::") or name in ("FixtureTask","ExecutionRole","WorkerLogs","PersistentFixtureTask","FixtureTaskRole"):
-                self.assertIn(r["Condition"],("FixtureNetworkEnabled","PersistentFixtureEnabled"))
+                self.assertIn(r["Condition"],("FixtureNetworkEnabled","PersistentFixtureEnabled","ProxyFixtureEnabled"))
         self.assertFalse(self.props("ResearchSubnet")["MapPublicIpOnLaunch"])
         self.assertFalse(self.props("WorkerSecurityGroup").get("SecurityGroupIngress"))
         self.assertIn("ImagesRequired",self.t["Rules"])
@@ -83,6 +83,26 @@ class FoundationTests(unittest.TestCase):
         self.assertEqual(statements[1]["Resource"]["Fn::Sub"],"${EvidenceBucket.Arn}/fixture-research/v1/7/*")
         self.assertEqual(statements[2]["Condition"]["StringEquals"]["s3:if-none-match"],"*")
         self.assertEqual(statements[2]["Action"],"s3:PutObject")
+
+    def test_synthetic_proxy_network(self):
+        self.assertEqual(self.t["Parameters"]["EnableProxyFixture"]["Default"],"false")
+        for name in ("ProxyFixtureWorkerSubnet","ProxyFixtureSubnet"):
+            self.assertFalse(self.props(name)["MapPublicIpOnLaunch"])
+            self.assertEqual(self.props(name+"Association")["RouteTableId"],{"Ref":"ProxyFixtureRoutes"})
+        for name in ("ProxyFixtureSecurityGroup","ProxyFixtureWorkerSecurityGroup"):
+            rules=self.props(name)["SecurityGroupEgress"]
+            self.assertFalse(self.props(name).get("SecurityGroupIngress"))
+            for rule in rules:
+                self.assertNotIn("CidrIp",rule)
+                self.assertNotIn("CidrIpv6",rule)
+                self.assertTrue("DestinationSecurityGroupId" in rule or "DestinationPrefixListId" in rule)
+        self.assertEqual(self.props("ProxyFixtureIngress"),{"GroupId":{"Ref":"ProxyFixtureSecurityGroup"},
+            "SourceSecurityGroupId":{"Ref":"ProxyFixtureWorkerSecurityGroup"},"IpProtocol":"tcp","FromPort":8443,"ToPort":8443})
+        for endpoint in ("S3Endpoint","DynamoEndpoint"):
+            self.assertIn({"Fn::If":["ProxyFixtureEnabled",{"Ref":"ProxyFixtureRoutes"},{"Ref":"AWS::NoValue"}]},
+                          self.props(endpoint)["RouteTableIds"])
+        self.assertEqual(len(self.props("ProxyFixtureSecurityGroup")["SecurityGroupEgress"]),2)
+        self.assertEqual(len(self.props("ProxyFixtureWorkerSecurityGroup")["SecurityGroupEgress"]),4)
 
     def test_endpoint_scope(self):
         self.assertEqual(self.props("S3Endpoint")["VpcEndpointType"],"Gateway")
