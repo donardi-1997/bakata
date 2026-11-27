@@ -43,6 +43,8 @@ try {
   assert.equal(catalogDenied?.status(),403);
   const catalogDeniedPost=await restricted.request.post(base+'/wp-admin/admin-post.php',{form:{action:'bakata_catalog_review_clear'}});
   assert.equal(catalogDeniedPost.status(),403);
+  const deniedProfit=await restricted.request.post(base+'/wp-admin/admin-post.php',{form:{action:'bakata_profitability_clear'}});
+  assert.equal(deniedProfit.status(),403);
   await restricted.close();
   const admin=await context();
   const page=await login(admin,env.WP_ADMIN_USER,env.WP_ADMIN_PASSWORD);
@@ -78,11 +80,29 @@ try {
   assert((await page.locator('table.widefat tbody').innerText()).includes('025216'));
   assert((await page.locator('table.widefat tbody').innerText()).includes('7000.25'));
   assert((await page.locator('table.widefat tbody').innerText()).includes('Sin evaluación vinculada'));
+  const deniedProfitNonce=await admin.request.post(base+'/wp-admin/admin-post.php',{form:{action:'bakata_profitability_clear'}});
+  assert.equal(deniedProfitNonce.status(),403);
+  await page.locator('#bk-profitability-file').setInputFiles('/tmp/bakata-profitability.json');
+  await Promise.all([page.waitForURL(u=>u.searchParams.get('bk_profitability_notice')==='loaded'),page.locator('#bk_profitability_load').click()]);
+  await page.getByText('Escenario listo para revisión, no aprobado').waitFor();
+  assert((await page.locator('table.widefat tbody').innerText()).includes('25,82%'));
+  await page.getByText('Ver costos y evidencia').click();
+  await page.getByText('Costo de adquisición revisado: COP 25.000,00').waitFor();
+  await page.getByText('fixture-cost',{exact:false}).first().waitFor();
+  await page.screenshot({path:new URL('intelligence-profitability.png',reports).pathname,fullPage:true});
+  await page.locator('#bk_profitability_clear').click();
+  await page.waitForURL(u=>u.searchParams.get('bk_profitability_notice')==='cleared');
+  await page.getByText('Sin evaluación vinculada').waitFor();
+  await page.locator('#bk-profitability-file').setInputFiles('/tmp/bakata-profitability.json');
+  await Promise.all([page.waitForURL(u=>u.searchParams.get('bk_profitability_notice')==='loaded'),page.locator('#bk_profitability_load').click()]);
   await page.locator('#bk-catalog-stock').selectOption('zero');
   await Promise.all([page.waitForURL(u=>u.searchParams.get('bk_stock')==='zero'),page.locator('#bk_catalog_filter').click()]);
   await page.getByText('No hay candidatos para estos filtros.').waitFor();
   await Promise.all([page.waitForURL(u=>u.searchParams.get('bk_catalog_notice')==='cleared'),page.locator('#bk_catalog_clear').click()]);
   await page.getByRole('heading',{name:'Sin catálogo cargado'}).waitFor();
+  await page.locator('#bk-catalog-file').setInputFiles('/tmp/bakata-catalog-review.json');
+  await Promise.all([page.waitForURL(u=>u.searchParams.get('bk_catalog_notice')==='loaded'),page.locator('#bk_catalog_load').click()]);
+  await page.getByText('Sin evaluación vinculada').waitFor();
   await admin.close();
   console.log('Intelligence administrator preview passed.');
 } finally {await browser.close();}
