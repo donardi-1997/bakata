@@ -70,8 +70,11 @@ class Calibration:
             if not evaluation_at<=now or start-evaluation_at>timedelta(days=7):
                 raise ValueError("Evaluation not available or too old at cohort start")
             observed=datetime.fromisoformat(record["observed_at"])
-            if start-observed>timedelta(microseconds=result["max_age"]):
-                raise ValueError("Baseline observation expires before cohort starts")
+            age=timedelta(microseconds=result["max_age"])
+            review_times=[datetime.fromisoformat(r["reviewed_at"]) for r in record["payload"]["reviews"]]
+            review_times.append(datetime.fromisoformat(economics["reviewed_at"]))
+            if start-observed>age or any(start-at>age for at in review_times):
+                raise ValueError("Baseline evidence expires before cohort starts")
             if self.db.execute("SELECT COUNT(*) FROM calibration_members WHERE cohort_id=?",(cohort_id,)).fetchone()[0]>=MAX_MEMBERS:
                 raise ValueError("Cohort member capacity reached")
             self.db.execute("INSERT INTO calibration_members VALUES (?,?,?,?,?,?,?)",
@@ -150,6 +153,7 @@ class Calibration:
                 "starts_at":start.isoformat(),"ends_at":end.isoformat(),"minimum_orders":minimum,
                 "enrolled":enrolled,"observed":observed,"missing":enrolled-observed,
                 "successes":len(positives),"failures":len(negatives),
+                "coverage_pct":rounded(Decimal(observed)*100/enrolled) if enrolled else None,
                 "status":"descriptive-review-ready" if ready else "insufficient-evidence",
                 "rank_concordance_pct":concordance,"bands":bands,
                 "margin_error_sample":len(errors),
