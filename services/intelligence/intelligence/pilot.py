@@ -184,7 +184,7 @@ def execute(raw, confirmation, ledger, *, transport=https_get, archive=None):
         batch = import_capture(registry,capture,now=at)
         capture_id = None
         if archive is not None:
-            capture_id, _ = archive.ingest(registry,capture,now=at)
+            capture_id, _ = archive.ingest(registry,capture,now=at,manifest_sha256=pilot.digest)
         ledger.finish(pilot,"succeeded",batch.evidence.sha256)
         return {"mode":"authorized-pilot","manifest_sha256":pilot.digest,"capture_id":capture_id,"evidence":asdict(batch.evidence),
                 "observations":[asdict(row) for row in batch.observations]}
