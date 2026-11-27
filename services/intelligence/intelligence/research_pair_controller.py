@@ -36,6 +36,14 @@ BIND_GRACE = 120  # a newer unbound claim may be an in-flight launch
 BIND_ATTEMPTS = 3
 
 
+class UnsafeTask(ValueError):
+    """Our task (identity verified) running with a configuration we did not request."""
+
+    def __init__(self, role, status, reason):
+        super().__init__("Unsafe %s task: %s" % (role, reason))
+        self.status = status
+
+
 def _encode(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
@@ -167,14 +175,42 @@ class PairController:
             raise ValueError("Unverified %s task" % role)
         last, desired = task.get("lastStatus"), task.get("desiredStatus")
         if last == "STOPPED" and desired == "STOPPED":
-            return "stopped"
-        if desired == "STOPPED" and last in _DRAINING:
-            return "stopping"
-        if desired == "RUNNING" and last == "RUNNING":
-            return "running"
-        if desired == "RUNNING" and last in _STARTING | {"DEACTIVATING"}:
-            return "starting"
-        raise ValueError("Unexpected %s task status" % role)
+            status = "stopped"
+        elif desired == "STOPPED" and last in _DRAINING:
+            status = "stopping"
+        elif desired == "RUNNING" and last == "RUNNING":
+            status = "running"
+        elif desired == "RUNNING" and last in _STARTING | {"DEACTIVATING"}:
+            status = "starting"
+        else:
+            raise ValueError("Unexpected %s task status" % role)
+        # Identity is verified above. IAM cannot constrain RunTask overrides or
+        # networking, so verify them here; an unsafe task is still ours to stop.
+        overrides = _dict(task.get("overrides", {}))
+        if overrides.get("taskRoleArn") or overrides.get("executionRoleArn"):
+            raise UnsafeTask(role, status, "role override")
+        expected = [{"name": n, "environment": self._environment(state)} for n in _CONTAINERS[role]]
+        if set(overrides) - {"containerOverrides"} or overrides.get("containerOverrides") != expected:
+            raise UnsafeTask(role, status, "overrides differ from the reviewed request")
+        subnets = set()
+        for attachment in _list(task.get("attachments", []), 10):
+            attachment = _dict(attachment)
+            if attachment.get("type") == "ElasticNetworkInterface":
+                for detail in _list(attachment.get("details", []), 50):
+                    detail = _dict(detail)
+                    if detail.get("name") == "subnetId":
+                        subnets.add(detail.get("value"))
+        # Before an ENI is attached the list may be empty; any present subnet must match.
+        if subnets and subnets != {getattr(c, role + "_subnet")}:
+            raise UnsafeTask(role, status, "subnet")
+        if last == "RUNNING" and not subnets:
+            raise UnsafeTask(role, status, "no network attachment")
+        return status
+
+    @staticmethod
+    def _environment(state):
+        return [{"name": "BAKATA_RESEARCH_RUN", "value": state.run},
+                {"name": "BAKATA_RESEARCH_UNTIL", "value": str(state.until)}]
 
     # -- launch ---------------------------------------------------------
     def launch(self, role):
@@ -202,8 +238,7 @@ class PairController:
                 raise ValueError("Proxy stopping after claim; launch abandoned, slot retained")
         c = self.config
         token = self._token(state, role)
-        env = [{"name": "BAKATA_RESEARCH_RUN", "value": state.run},
-               {"name": "BAKATA_RESEARCH_UNTIL", "value": str(state.until)}]
+        env = self._environment(state)
         try:
             result = _dict(self.ecs.run_task(
                 cluster=c.cluster, taskDefinition=c.definition(role), launchType="FARGATE",
@@ -282,9 +317,14 @@ class PairController:
             if member.stopped:
                 observed[role] = "stopped"
             elif member.identity is not None:
-                status = attempt(role, lambda role=role, member=member: self._describe(state, role, member.identity))
-                if status is not None:
-                    observed[role] = status
+                try:
+                    observed[role] = self._describe(state, role, member.identity)
+                except UnsafeTask as exc:
+                    # Our task, unsafe configuration: report it AND stop it if still active.
+                    errors[role] = "%s: %s" % (type(exc).__name__, exc)
+                    observed[role] = exc.status
+                except Exception as exc:  # identity unverified: never stop an unknown task
+                    errors[role] = "%s: %s" % (type(exc).__name__, exc)
 
         def record_stopped(role):
             revision, latest, _e = self._state()
