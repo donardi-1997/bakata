@@ -4,6 +4,13 @@ from dropify_security_patch import one
 
 
 def patch_catalog(name, source):
+    if name == "wc-dropi-integration.php":
+        source = one(source, "register_activation_hook(__FILE__, 'create_dropi_tokens_table');",
+                     "// Catalog validation build requires existing token table; no activation migration.")
+        source = one(source, """    $Dropi = JPIODFW_Dropi::GetInstance();
+    $Dropi->InitPlugin();""", """    if (is_admin() && class_exists('WooCommerce')) {
+        JPIODFW_Products::GetInstance()->init();
+    }""")
     if name == "clasess/views/Products.php":
         start = source.index("    public function getProducts($product_list)")
         helper = (Path(__file__).resolve().parent.parent / "tools/dropify-quarantine/catalog-bridge.php").read_text().removeprefix("<?php\n")
@@ -18,6 +25,19 @@ def patch_catalog(name, source):
                      "        // Catalog validation build: no import scripts or external CDN.")
         source = one(source, "        add_action('wp_ajax_import', array(&$this, 'my_import_product_event'));",
                      "        // Catalog validation build: no import endpoint.")
+        source = one(source, "        add_action('wp_ajax_get-woo-products', array(&$this, 'my_get_woo_products_cb2'));",
+                     "        // Catalog validation build: no WooCommerce product endpoint.")
+        source = one(source, "        add_filter('manage_edit-product_columns', array($this, 'custom_shop_product_column'), 20);",
+                     "        // Catalog validation build: no storefront product hooks.")
+        source = one(source, "        add_action('manage_product_posts_custom_column', array($this, 'show_custom_product_column_values'), 20, 2);",
+                     "        // Catalog validation build: no storefront product hooks.")
+        source = one(source, "        $this->helper->checkRequirementes();", "        // No token-table migration or product metadata updates.")
+        source = one(source, """        $hook = add_submenu_page(
+            'dropi',
+            'Productos',
+            'Productos',""", """        $hook = add_menu_page(
+            'Dropify — Catálogo de investigación',
+            'Dropify',""")
     if name == "clasess/models/ProductsModel.php":
         start = source.index("    public function getProducts(")
         end = source.index("    /** get product by sku", start)
