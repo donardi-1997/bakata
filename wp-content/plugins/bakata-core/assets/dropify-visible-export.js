@@ -43,9 +43,6 @@
           const title=cell.querySelector('.row-title');
           if (title && visible(title)) value=title.innerText.trim().replace(/\s+/g,' ');
           else {
-            const clone=cell.cloneNode(true);
-            clone.querySelectorAll('.row-actions, button, input').forEach(x=>x.remove());
-            clone.querySelectorAll('a').forEach(x=>{if(normalize(x.textContent)==='importar') x.remove();});
             // Do not read hidden descendants or guess names from opaque markup.
             value=cell.innerText.split(/\n/).filter(x=>normalize(x)!=='importar').join(' ').trim().replace(/\s+/g,' ');
           }
@@ -80,6 +77,7 @@
       try {
         const payload=collect();
         const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
+        if(blob.size>262144) throw Error('Exportación superior a 256 KiB.');
         const url=URL.createObjectURL(blob);
         const link=document.createElement('a');
         link.href=url;
