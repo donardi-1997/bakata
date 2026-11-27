@@ -36,6 +36,25 @@ def patch_catalog(name, source):
             || !is_string($store_filter) || !preg_match('/^[1-9][0-9]{0,9}$/D',$store_filter)) {
             return null;
         }
+        // One attempt per explicit operator approval, scoped to store, offset and query.
+        // Never delete or retry an uncertain receipt.
+        if (!defined('BAKATA_DROPIFY_CATALOG_APPROVAL_REF')
+            || !is_string(BAKATA_DROPIFY_CATALOG_APPROVAL_REF)
+            || !preg_match('/^[A-Za-z0-9._-]{1,128}$/D', BAKATA_DROPIFY_CATALOG_APPROVAL_REF)
+            || !defined('BAKATA_DROPIFY_CATALOG_APPROVED_UNTIL')
+            || !is_int(BAKATA_DROPIFY_CATALOG_APPROVED_UNTIL)
+            || BAKATA_DROPIFY_CATALOG_APPROVED_UNTIL <= time()
+            || BAKATA_DROPIFY_CATALOG_APPROVED_UNTIL > time()+86400
+            || !defined('BAKATA_DROPIFY_CATALOG_APPROVED_STORE')
+            || BAKATA_DROPIFY_CATALOG_APPROVED_STORE !== $store_filter
+            || !defined('BAKATA_DROPIFY_CATALOG_APPROVED_OFFSET')
+            || BAKATA_DROPIFY_CATALOG_APPROVED_OFFSET !== $current_page
+            || !defined('BAKATA_DROPIFY_CATALOG_APPROVED_QUERY')
+            || BAKATA_DROPIFY_CATALOG_APPROVED_QUERY !== $search
+            || $per_page !== 10 || $onlyVerifiedUsers !== null || $filter_have_stock !== null
+            || $filter_have_description !== null || $category_filter !== null || $warehouses_filter !== null) {
+            return null;
+        }
         $products = [];""")
         method = one(method, "            $token = $token[0];", """            if (!is_array($token) || count($token) !== 1) { return null; }
             $token = reset($token);""")
@@ -45,6 +64,11 @@ def patch_catalog(name, source):
         }
         $all_products = array();""")
         method = one(method, "'timeout' => '100000',", "'timeout' => 15,\n            'limit_response_size' => 524288,")
+        method = one(method, "        $response = wp_remote_post(", """        $receipt = 'bk_dropify_catalog_' . hash('sha256', BAKATA_DROPIFY_CATALOG_APPROVAL_REF);
+        if (!add_option($receipt, array('store'=>$store_filter,'offset'=>$current_page,'at'=>gmdate(DATE_ATOM)), '', false)) {
+            return null;
+        }
+        $response = wp_remote_post(""")
         # Reuse the original connector request; do not expose errors, bodies or token.
         cut = method.index("        if (is_wp_error($response))", method.index("$response = wp_remote_post("))
         method = method[:cut] + """        if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
