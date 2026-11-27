@@ -1,8 +1,7 @@
 """Bounded, explicitly authorized recurring Store API captures; no installed timer."""
 from contextlib import contextmanager
-from datetime import timedelta
+from datetime import datetime, timedelta
 import hmac
-import re
 import sqlite3
 
 from .pilot import load_manifest, reference, utcnow, MAX_MANIFEST
@@ -88,6 +87,7 @@ class RecurringCapture:
         self._policy(pilot,interval)
         self._pilot_evidence(pilot)
         now=utcnow()
+        pilot.validate(now)
         # Wait a full interval after registration, even after an old pilot.
         due=now+timedelta(seconds=interval)
         if due>=min(pilot.approved_until,pilot.robots_valid_until):
@@ -95,6 +95,8 @@ class RecurringCapture:
         with self.transaction():
             if self.db.execute("SELECT COUNT(*) FROM int_recurring").fetchone()[0]>=MAX_SCHEDULES:
                 raise ValueError("Schedule capacity reached")
+            if self.db.execute("SELECT 1 FROM int_recurring WHERE host=?",(pilot.host,)).fetchone():
+                raise PolicyError("Host schedule already registered; renewal not implemented")
             self.db.execute("""INSERT INTO int_recurring VALUES (?,?,?,?,?,?,?,'enabled',NULL,NULL)""",
                 (pilot.host,pilot.source,pilot.digest,approval_ref,interval,due.isoformat(),attempts))
 
@@ -111,6 +113,7 @@ class RecurringCapture:
             raise PolicyError("Source disabled")
         self._pilot_evidence(pilot)
         now=utcnow()
+        pilot.validate(now)
         with self.transaction():
             schedule=self.db.execute("""SELECT digest,interval_seconds,next_due,remaining,state
                 FROM int_recurring WHERE host=?""",(pilot.host,)).fetchone()
@@ -120,7 +123,7 @@ class RecurringCapture:
             self._policy(pilot,interval)
             if state!="enabled" or remaining<=0:
                 return None
-            if now.isoformat()<due:
+            if now<datetime.fromisoformat(due):
                 return None
             if self.db.execute("SELECT 1 FROM int_recurring WHERE state='running'").fetchone():
                 raise PolicyError("Another capture is running or uncertain")
