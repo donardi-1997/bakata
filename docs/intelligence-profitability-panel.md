@@ -1,0 +1,9 @@
+# INT-16C — Vista de expediente económico
+
+Integra en Bakatá Intelligence > Revisión de catálogo un expediente de rentabilidad por candidato. Cargar primero una página exportada por INT-16A; después un JSON bakata-linked-profitability-v1 de INT-16B (PR #61 aún en validación al crear esta rama). La UI exige identidad, tienda, timestamp, SKU, título, stock y precios reportados exactos de la captura; un expediente de otra página/observación no se adjunta.
+
+Muestra contribución y margen del escenario, puntuación, costos COP, deducciones variables, evidencia, referencia de mapeo y costo y huella de evaluación. El contrato PHP valida límites, campos exactos, JSON compacto, fechas, coherencia aritmética y rúbrica; no firma ni autentica el archivo, no comprueba fuentes externas ni reconsulta las bases. No ofrece aprobación, importación ni publicación. El precio base del proveedor permanece separado del costo revisado. La vigencia declarada puede acortarse al recibir evidencia nueva; no se presenta como garantía. No existe ranking automático.
+
+Solo administradores, POST con nonce, upload temporal sin biblioteca multimedia, un expediente por usuario y sitio, máximo 32 KiB, transient hasta 15 min y nunca más allá de la validez. Reemplazar o eliminar la página elimina el expediente asociado; se revalida al renderizar. Un expediente rechazado no sustituye otro válido. Como otros transients, puede permanecer temporalmente en caché/base/respaldo. Sin llamadas remotas, sin Woo writes. No utilizar archivos de origen desconocido.
+
+CI: fixture sintética generada con motor de scoring existente y formato del PR #61, contrato PHP y browser QA (acceso, nonce, carga, visualización, limpieza y asociación a página). No es un ensayo de extremo a extremo del exportador #61 hasta integrar ambos PR. Próximo frente: verificar salida real de ese exportador contra PHP y desarrollar decisiones persistentes, sin publicación automática.
