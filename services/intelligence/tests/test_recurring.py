@@ -51,6 +51,7 @@ class RecurringTests(unittest.TestCase):
         raw=self.raw()
         execute(raw,hashlib.sha256(raw).hexdigest(),self.ledger,transport=self.transport,archive=self.archive)
         self.transport.reset_mock()
+        self.now=utcnow()
 
     def configure(self,raw=None,attempts=2,interval=MIN_INTERVAL):
         raw=raw or self.raw()
@@ -69,6 +70,8 @@ class RecurringTests(unittest.TestCase):
         self.pilot()
         self.configure()
         self.assertEqual(self.scheduler.list()[0]["state"],"enabled")
+        with self.assertRaisesRegex(PolicyError,"already registered"):
+            self.configure()
         self.transport.assert_not_called()
 
     def test_missing_archive_evidence(self):
