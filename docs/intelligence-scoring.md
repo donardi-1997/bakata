@@ -20,6 +20,8 @@ Las seis puntuaciones manuales son juicios explícitos en los niveles 0,25,50,75
 
 Puntos = puntuación del criterio × peso / 100. La suma solo se emite cuando la cobertura ponderada alcanza 100% y la observación no es caduca. No reponderar criterios faltantes. Cada componente muestra puntuación, puntos, evidencia y razón. Las referencias son anotaciones de un llamador confiable, no prueba criptográfica ni permisos autenticados.
 
+Los cálculos decimales, incluido `margin_pct`, usan un contexto local fijo de 28 dígitos y redondeo half-even; el total se cuantiza a dos decimales con half-up. Precisión, redondeo, límites de exponente, traps y flags del llamador no alteran el resultado ni se modifican. El ranking compara los totales sin redondearlos de nuevo. Los importes admitidos están entre 0 y 10¹² unidades menores, con precio de venta estrictamente positivo cuando se conoce.
+
 Rentabilidad: escenario en la misma moneda que la observación, centavos COP/USD/EUR. Precio bruto de venta menos costo de proveedor, envío asumido, comisión fija, reserva de devoluciones, otros costos y deducciones variables agregadas en bps (redondeadas hacia arriba). Sin valor implícito para costos desconocidos. Margen = contribución / precio bruto. Se sigue la convención matemática de Bakatá Core Pricing Preview, pero no se invoca el motor PHP ni se garantiza paridad completa de políticas fiscales, redondeo por concepto, promociones o asignación por pedido. El precio de mercado observado no se toma automáticamente como costo ni precio de venta.
 
 Bloqueos iniciales: contribución <=0, evidencia explícita de proveedor o riesgo de devolución en nivel 0, observación caduca. Revisión posterior de requisitos legales, seguridad de producto, propiedad intelectual, stock, pagos y condiciones comerciales sigue siendo obligatoria. No son puertas automáticas de publicación.
@@ -28,4 +30,4 @@ Estados: incomplete, blocked, review-ready. Solo review-ready entra al ranking; 
 
 ## Validación y alcance
 
-Diez pruebas sintéticas cubren pesos, contribución, redondeo, precisión, datos faltantes, bloqueos, vigencia, vínculos, validación y ranking. No se consulta ninguna fuente ni se guarda un scoring comercial real. Las revisiones, evidencia y resultados no se persisten todavía; no hay interfaz ni permisos de revisor. La siguiente fase, INT-07, construirá el panel y los contratos de lectura/revisión, sin activar fuentes vivas ni publicación automática.
+Las pruebas sintéticas cubren pesos, contribución, redondeo, aislamiento del contexto decimal y valores límite, datos faltantes, bloqueos, vigencia, vínculos, validación y ranking. No se consulta ninguna fuente ni se guarda un scoring comercial real. Las revisiones, evidencia y resultados no se persisten todavía; no hay interfaz ni permisos de revisor. La siguiente fase, INT-07, construirá el panel y los contratos de lectura/revisión, sin activar fuentes vivas ni publicación automática.

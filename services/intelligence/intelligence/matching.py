@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from enum import Enum
 from itertools import combinations
 from .normalization import NormalizedProduct
+from .references import ref
 
 
 class MatchKind(str, Enum):
@@ -67,13 +68,15 @@ class ReviewedLink:
     right_key: tuple[str, str, str]
     review_ref: str
 
+    def __post_init__(self):
+        ref(self.review_ref)
+
 
 def approve_pair(proposal: MatchProposal, review_ref: str, *, variant_equivalence_confirmed: bool) -> ReviewedLink:
     """One reviewed pair only. No transitive grouping or persistent approval yet."""
     if not proposal.reviewable or variant_equivalence_confirmed is not True:
         raise ValueError("Explicit variant equivalence and reviewable evidence required")
-    if not isinstance(review_ref, str) or not review_ref.strip() or len(review_ref) > 128 or any(ord(c) < 32 for c in review_ref):
-        raise ValueError("Missing review reference")
+    ref(review_ref)
     # A title match is a search hint, never sufficient for approving equivalence.
     if proposal.kind is MatchKind.TITLE:
         raise ValueError("Add verified brand/model or GTIN evidence before approval")

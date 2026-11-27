@@ -14,11 +14,11 @@ El módulo es offline, puro y no modifica observaciones, catálogos, precios ni 
 1. No comparar observaciones duplicadas de una identidad; distintos IDs de una misma fuente no se vinculan.
 2. Cualquier contradicción explícita en GTIN, marca, modelo o variante común bloquea la propuesta.
 3. GTIN coincidente validado o marca y modelo coincidentes generan propuestas revisables. Título normalizado coincidente es únicamente una pista débil.
-4. Si falta cobertura de variantes se informa. Toda aprobación necesita confirmación explícita de equivalencia de variante y referencia de revisión; el título por sí solo no permite aprobar.
+4. Si falta cobertura de variantes se informa. Toda aprobación necesita confirmación explícita de equivalencia de variante y referencia de revisión de 1 a 128 caracteres ASCII de `A-Z`, `a-z`, `0-9`, `.`, `_` o `-`, sin normalización; el título por sí solo no permite aprobar. La referencia no autentica ni autoriza al revisor.
 5. ReviewedLink vincula dos claves de observación concretas. No fusiona registros, no deduce vínculos transitivos y no se reutiliza automáticamente para capturas futuras.
 
 No se utilizan precios, SKU local ni similitud de texto como prueba suficiente de equivalencia. Los resultados son propuestas deterministas, no probabilidades. Se limita la vista a 1.000 observaciones y el comparador a 200 identidades (hasta 19.900 pares). Para catálogos mayores se necesitarán índices de candidatos.
 
 ## Validación y límites
 
-Nueve pruebas sintéticas descubiertas por unittest verifican normalización, GTIN, historial, duplicados, conflictos, datos incompletos, aprobación explícita y límites. No hay fuentes reales, persistencia de anotaciones/revisiones, interfaz ni autorización de revisores en esta fase. Las anotaciones se suministran por un llamador confiable y todavía no se extraen de INT-03. La base de datos original no cambia. INT-05 deberá tratar moneda, fecha, variante, impuestos, envío y fuente antes de cualquier comparación comercial; los pares no aprobados no son comparables automáticamente.
+Las pruebas sintéticas descubiertas por unittest verifican normalización, GTIN, historial, duplicados, conflictos, datos incompletos, aprobación explícita y límites. El archivo comercial local puede persistir una revisión de equivalencia con sus anotaciones y huella; la comparación pura no verifica su autenticidad ni consulta automáticamente ese archivo. No hay interfaz ni autorización de revisores en este flujo: las anotaciones y vínculos se suministran por un llamador confiable. Los pares no aprobados no son comparables automáticamente; la comparación de precios también exige contexto de moneda, fecha, variante, impuestos, envío y fuente.

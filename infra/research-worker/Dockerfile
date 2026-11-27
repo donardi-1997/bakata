@@ -1,6 +1,6 @@
 # INT-18F: CLI-only, fixture-only image. No web server or live credential path.
-FROM wordpress:php8.3-apache AS wordpress-core
-FROM wordpress:cli-php8.3
+FROM wordpress:php8.3-apache@sha256:9b46af6a41fd0dcb2e5cf85033a6350d05010356847ede1cfcac5cf94292eb26 AS wordpress-core
+FROM wordpress:cli-php8.3@sha256:fc50189ac8d3256891d0d964f8d80cf62189eb6262f53c7fd8bfc40debd71029
 USER root
 WORKDIR /opt/bakata
 COPY --from=wordpress-core /usr/src/wordpress/ /opt/bakata/wp/

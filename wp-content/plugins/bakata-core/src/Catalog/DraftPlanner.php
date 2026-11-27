@@ -3,12 +3,14 @@ declare(strict_types=1);
 
 namespace Bakata\Core\Catalog;
 
+use Bakata\Core\Inventory\StockObservation;
 use Bakata\Core\Pricing\PricingPolicy;
 use Bakata\Core\Pricing\PricingPreview;
 use Bakata\Core\Pricing\PricingQuote;
 use Bakata\Core\Pricing\UnitCosts;
 use Bakata\Core\Suppliers\SupplierProduct;
 use DateTimeImmutable;
+use DateTimeZone;
 use InvalidArgumentException;
 
 final readonly class DraftPlan
@@ -33,8 +35,10 @@ final class DraftPlanner
         if ($maxAgeSeconds < 1 || $maxAgeSeconds > 30 * 86400) {
             throw new InvalidArgumentException('Invalid import freshness policy.');
         }
-        $age = $asOf->getTimestamp() - $source->observedAt->getTimestamp();
-        if ($age < 0 || $age > $maxAgeSeconds) {
+        StockObservation::validateTime($asOf);
+        StockObservation::validateTime($source->observedAt);
+        $cutoff = $asOf->setTimezone(new DateTimeZone('UTC'))->modify('-' . $maxAgeSeconds . ' seconds');
+        if ($source->observedAt > $asOf || $source->observedAt < $cutoff) {
             throw new InvalidArgumentException('Source observation is stale or from the future.');
         }
         if ($source->currency !== $costs->currency || $source->currencyMinorUnit !== $costs->minorUnit

@@ -51,6 +51,20 @@ class NormalizationTests(unittest.TestCase):
         self.assertEqual(link.left_key, self.a.key)
         self.assertEqual(link.right_key, self.b.key)
 
+    def test_review_reference_rejects_invisible_and_control_characters(self):
+        a = normalize_product(self.a, self.attrs(self.a, gtin="036000291452"))
+        b = normalize_product(self.b, self.attrs(self.b, gtin="0036000291452"))
+        proposal = compare(a, b)
+        for ref in ("", " ", "review\n1", "review\x7f1", "review\u00851", "review\u200b1",
+                    "\u034f", "\ufe0f", "\u2800", "\u3164", "review\ud8001",
+                    "revisión-1", "x" * 129, None):
+            with self.subTest(ref=repr(ref)), self.assertRaises(ValueError):
+                approve_pair(proposal, ref, variant_equivalence_confirmed=True)
+        self.assertEqual(
+            approve_pair(proposal, "Review_1.-", variant_equivalence_confirmed=True).review_ref,
+            "Review_1.-",
+        )
+
     def test_variant_conflict_overrides_gtin(self):
         a = normalize_product(self.a, self.attrs(self.a, gtin="036000291452", variants=(("color","Negro"),)))
         b = normalize_product(self.b, self.attrs(self.b, gtin="036000291452", variants=(("Color","Blanco"),)))

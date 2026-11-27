@@ -29,6 +29,17 @@ docker compose down
 
 El bootstrap es repetible: no reinstala un WordPress existente. Los datos se conservan en volúmenes; `docker compose down -v` los destruye. No ejecutar contra producción.
 
+### QA de homepage con WebKit (opt-in)
+
+Solo para una instancia local desechable con los fixtures de CI ya cargados y las dependencias de `qa` instaladas. Instalar WebKit de Playwright si aún no está disponible y ejecutar la suite de presentación y navegación, sin repetir la prueba de carrito:
+
+```sh
+qa/node_modules/.bin/playwright install --with-deps webkit
+BAKATA_CI_FIXTURES=1 BAKATA_QA_BROWSER=webkit BAKATA_QA_LAYOUT_ONLY=1 node qa/homepage.mjs
+```
+
+Los informes quedan en `qa/reports/webkit-layout/`. Chromium y la suite completa siguen siendo los valores por defecto. Playwright WebKit no sustituye una prueba en Safari real. Esta ejecución no se añade automáticamente a CI.
+
 ## Código propio
 
 - `wp-content/themes/bakata`: tema de bloques.

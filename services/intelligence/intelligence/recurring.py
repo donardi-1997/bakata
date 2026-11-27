@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 import hmac
+import re
 import sqlite3
 
 from .pilot import load_manifest, reference, utcnow, MAX_MANIFEST
@@ -13,6 +14,121 @@ MIN_INTERVAL = 21600
 MAX_INTERVAL = 86400
 MAX_ATTEMPTS = 4
 MAX_SCHEDULES = 10
+INSPECT_MAX_CANDIDATES = 100
+INSPECT_VM_STEPS = 1000000
+
+
+def inspect_interrupted(db, archive):
+    """Report local candidates only; this does not reconcile either database."""
+    if db.in_transaction or archive.in_transaction or db is archive:
+        raise ValueError("Separate idle ledger and archive connections required")
+    limits=[]
+    def make_budget():
+        steps=0
+        def budget():
+            nonlocal steps
+            steps+=1000
+            return steps>INSPECT_VM_STEPS
+        return budget
+    try:
+        for connection in (db,archive):
+            limits.append(connection.setlimit(sqlite3.SQLITE_LIMIT_LENGTH,1048576))
+            connection.set_progress_handler(make_budget(),1000)
+        return _inspect_interrupted(db,archive)
+    except (sqlite3.Error, ValueError, TypeError, OverflowError):
+        raise ValueError("Inspection failed: invalid, unsupported or oversized local evidence") from None
+    finally:
+        for connection,limit in zip((db,archive),limits):
+            connection.set_progress_handler(None,0)
+            connection.setlimit(sqlite3.SQLITE_LIMIT_LENGTH,limit)
+
+
+def _inspect_interrupted(db, archive):
+    from .storage import APPLICATION_ID, SCHEMA_VERSION
+    if (db.execute("PRAGMA application_id").fetchone()[0],
+        db.execute("PRAGMA user_version").fetchone()[0])!=(0,0):
+        raise ValueError("Unsupported ledger")
+    app=archive.execute("PRAGMA application_id").fetchone()[0]
+    version=archive.execute("PRAGMA user_version").fetchone()[0]
+    if app!=APPLICATION_ID or version not in (1,SCHEMA_VERSION):
+        raise ValueError("Unsupported archive")
+    db.execute("SELECT host,digest,state,capture_sha256 FROM int_pilot_receipts LIMIT 0")
+    db.execute("SELECT host,source,digest,remaining,last_attempt,state FROM int_recurring LIMIT 0")
+    db.execute("SELECT host,attempt,started,state FROM int_recurring_events LIMIT 0")
+    archive.execute("SELECT source,host,adapter FROM sources LIMIT 0")
+    archive.execute("SELECT id,source,observed_at,sha256,manifest_sha256 FROM captures LIMIT 0")
+    rows=db.execute("""SELECT s.host,s.source,s.digest,s.remaining,s.last_attempt,
+        e.attempt,e.started FROM int_recurring s LEFT JOIN int_recurring_events e
+        ON e.host=s.host AND e.state='reserved'
+        WHERE s.state='running' LIMIT ?""",(MAX_SCHEDULES+1,)).fetchall()
+    result=[]
+    for host,source,digest,remaining,last_attempt,attempt,started in rows[:MAX_SCHEDULES]:
+        if not isinstance(host,str) or len(host)>253 or not re.fullmatch(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}",host):
+            raise ValueError("Invalid host")
+        if not isinstance(source,str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,63}",source):
+            raise ValueError("Invalid source")
+        if not isinstance(digest,str) or not re.fullmatch(r"[0-9a-f]{64}",digest):
+            raise ValueError("Invalid digest")
+        if type(remaining) is not int or not 0<=remaining<=MAX_ATTEMPTS:
+            raise ValueError("Invalid remaining")
+        if attempt is not None and (type(attempt) is not int or not 1<=attempt<=MAX_ATTEMPTS):
+            raise ValueError("Invalid attempt")
+        entry={"manifest_sha256":digest,
+               "remaining":remaining,"last_attempt":last_attempt,
+               "attempt":attempt,"started":started,"candidates":[]}
+        for value in (last_attempt,started):
+            if value is not None:
+                _inspect_time(value)
+        history=db.execute("""SELECT attempt,started,state FROM int_recurring_events
+            WHERE host=? ORDER BY attempt LIMIT ?""",(host,MAX_ATTEMPTS+1)).fetchall()
+        coherent=len(history)<=MAX_ATTEMPTS and len(history)>0
+        if attempt is not None and remaining+attempt>MAX_ATTEMPTS:
+            coherent=False
+        previous=None
+        for index,(number,when,state) in enumerate(history,1):
+            if type(number) is not int or number!=index or state not in ("reserved","succeeded","failed-review"):
+                coherent=False
+            try:
+                at=_inspect_time(when)
+                if previous is not None and at<previous:
+                    coherent=False
+                previous=at
+            except (ValueError,TypeError,OverflowError):
+                coherent=False
+            if index<len(history) and state!="succeeded":
+                coherent=False
+        if (started is None or started != last_attempt or sum(row[0]==host for row in rows)!=1
+                or not coherent or history[-1]!=(attempt,started,"reserved")):
+            entry["evidence"]="inconsistent"
+        else:
+            start=_inspect_time(started)
+            candidates=archive.execute("""SELECT c.id,c.observed_at,c.sha256
+                FROM captures c JOIN sources s ON s.source=c.source
+                WHERE s.host=? AND s.adapter=? AND c.source=? AND c.manifest_sha256=?
+                LIMIT ?""",
+                (host,SourceKind.STORE_API.value,source,digest,INSPECT_MAX_CANDIDATES+1)).fetchall()
+            for cid,observed,sha in candidates[:INSPECT_MAX_CANDIDATES]:
+                if any(not isinstance(v,str) or not re.fullmatch(r"[0-9a-f]{64}",v) for v in (cid,sha)):
+                    raise ValueError("Invalid capture digest")
+                at=_inspect_time(observed)
+                if at>=start:
+                    entry["candidates"].append({"capture_id":cid,"observed_at":observed,
+                                                "sha256":sha})
+            count=len(entry["candidates"])
+            entry["evidence"]=("truncated" if len(candidates)>INSPECT_MAX_CANDIDATES else
+                               "absent" if count==0 else "unique" if count==1 else "ambiguous")
+        result.append(entry)
+    if len(rows)>MAX_SCHEDULES:
+        for entry in result:
+            entry["evidence"]="truncated"
+        result.append({"evidence":"truncated"})
+    return result
+
+
+def _inspect_time(value):
+    if not isinstance(value,str) or not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?\+00:00",value):
+        raise ValueError("Invalid timestamp")
+    return datetime.fromisoformat(value)
 
 
 class RecurringCapture:
@@ -188,8 +304,21 @@ def main():
     disable=commands.add_parser("disable")
     disable.add_argument("host")
     commands.add_parser("list")
+    commands.add_parser("inspect")
     args=parser.parse_args()
     os.umask(0o077)
+    if args.command=="inspect":
+        try:
+            if not args.ledger.is_file() or not args.archive.is_file() or args.ledger.samefile(args.archive):
+                raise ValueError("Invalid databases")
+            # Never initialize, migrate or open either database for writing.
+            with closing(sqlite3.connect(args.ledger.resolve().as_uri()+"?mode=ro",uri=True)) as db, \
+                 closing(sqlite3.connect(args.archive.resolve().as_uri()+"?mode=ro",uri=True)) as archive:
+                result=inspect_interrupted(db,archive)
+        except (OSError,sqlite3.Error,ValueError):
+            parser.exit(1,"Inspection failed: invalid, unsupported or oversized local evidence\n")
+        print(json.dumps(result,ensure_ascii=False))
+        return
     if not args.ledger.is_file() or not args.archive.is_file() or args.ledger.samefile(args.archive):
         parser.error("Existing distinct pilot ledger and archive required")
     signal.alarm(45)

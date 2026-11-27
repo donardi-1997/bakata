@@ -3,10 +3,12 @@ declare(strict_types=1);
 
 namespace Bakata\Core\Catalog;
 
+use Bakata\Core\Inventory\StockObservation;
 use Bakata\Core\Pricing\PricingPolicy;
 use Bakata\Core\Pricing\UnitCosts;
 use Bakata\Core\Suppliers\SupplierProduct;
 use DateTimeImmutable;
+use DateTimeZone;
 use RuntimeException;
 
 /**
@@ -26,6 +28,7 @@ final class WooDraftImporter
             || !current_user_can('edit_products')) {
             throw new RuntimeException('Draft import requires WooCommerce and product editing capability.');
         }
+        StockObservation::validateTime($source->observedAt);
         // Recalculate from validated inputs instead of accepting a fabricated quote.
         $plan = (new DraftPlanner())->plan($source, $costs, $policy, new DateTimeImmutable('now'), $maxAgeSeconds);
         if ($source->currency !== get_woocommerce_currency()
@@ -37,6 +40,7 @@ final class WooDraftImporter
             throw new RuntimeException('Source title requires editorial normalization.');
         }
         $sku = $source->proposedSku();
+        $observedAt = $source->observedAt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.uP');
         $existingId = (int) wc_get_product_id_by_sku($sku);
         if ($existingId > 0) {
             $existing = wc_get_product($existingId);
@@ -46,6 +50,10 @@ final class WooDraftImporter
                 || !$existing->is_type('simple')
                 || $existing->get_meta('_bakata_source_identity', true, 'edit') !== $source->identity()
                 || $existing->get_meta('_bakata_import_fingerprint', true, 'edit') !== $plan->fingerprint
+                || $existing->get_meta('_bakata_observed_at', true, 'edit') !== $observedAt
+                || $existing->get_meta('_bakata_supplier_id', true, 'edit') !== $source->supplierId
+                || $existing->get_meta('_bakata_source_stock', true, 'edit') !== (string) $source->availableQuantity
+                || $existing->get_sku('edit') !== $sku
                 || $existing->get_name('edit') !== $title
                 || !$this->isInertDraft($existing)) {
                 throw new RuntimeException('Existing SKU conflicts with requested inert draft; manual review required.');
@@ -68,7 +76,7 @@ final class WooDraftImporter
         $product->update_meta_data('_bakata_source_identity', $source->identity());
         $product->update_meta_data('_bakata_supplier_id', $source->supplierId);
         $product->update_meta_data('_bakata_import_fingerprint', $plan->fingerprint);
-        $product->update_meta_data('_bakata_observed_at', $source->observedAt->format(DATE_ATOM));
+        $product->update_meta_data('_bakata_observed_at', $observedAt);
         $product->update_meta_data('_bakata_source_stock', (string) $source->availableQuantity);
         $product->update_meta_data('_bakata_candidate_price_minor', (string) $plan->quote->priceMinor);
         $product->update_meta_data('_bakata_candidate_currency', $plan->quote->currency);
@@ -80,7 +88,13 @@ final class WooDraftImporter
         $stored = wc_get_product($id);
         if (!$stored || !$this->isInertDraft($stored)
             || $stored->get_sku('edit') !== $sku
-            || $stored->get_meta('_bakata_import_fingerprint', true, 'edit') !== $plan->fingerprint) {
+            || $stored->get_meta('_bakata_import_fingerprint', true, 'edit') !== $plan->fingerprint
+            || $stored->get_meta('_bakata_source_identity', true, 'edit') !== $source->identity()
+            || $stored->get_meta('_bakata_supplier_id', true, 'edit') !== $source->supplierId
+            || $stored->get_meta('_bakata_source_stock', true, 'edit') !== (string) $source->availableQuantity
+            || $stored->get_name('edit') !== $title
+            || !$stored->is_type('simple')
+            || $stored->get_meta('_bakata_observed_at', true, 'edit') !== $observedAt) {
             // A third-party hook may have changed the stored object. Do not
             // overwrite or delete it blindly; report a hard failure.
             throw new RuntimeException('Saved product does not satisfy draft invariants; manual review required.');

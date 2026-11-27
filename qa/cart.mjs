@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 const require = createRequire(import.meta.url);
 assert.equal(process.env.BAKATA_CI_FIXTURES,'1');
 const base = new URL('http://localhost:8080/');
 const reports = new URL('./reports/',import.meta.url);
 await mkdir(reports,{recursive:true});
-const out = name => new URL(name,reports).pathname;
+const out = name => fileURLToPath(new URL(name,reports));
 const browser = await chromium.launch();
 const results = [], failures = [];
 const tags = ['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa'];
@@ -127,8 +129,21 @@ async function run(width) {
     if((await toggle.getAttribute('aria-expanded'))==='false')await toggle.click();
     await input.waitFor({state:'visible',timeout:10000});
     assert.equal(await toggle.getAttribute('aria-expanded'),'true','Coupon disclosure expanded');
-    await input.fill(coupon);
     const apply=couponPanel.locator('.wc-block-components-totals-coupon__button');
+    phase='coupon-invalid';
+    const invalidCoupon='ci-invalid-'+randomUUID();
+    const beforeInvalid=await readCart(page);
+    await input.fill(invalidCoupon);
+    await apply.click();
+    const errorNotice=page.locator('.wc-block-components-notice-banner.is-error, .wc-block-components-validation-error');
+    await errorNotice.first().waitFor({state:'visible'});
+    assert((await errorNotice.first().innerText()).includes(invalidCoupon),'Invalid coupon error identifies the submitted code');
+    const afterInvalid=await readCart(page);
+    assert.deepEqual(afterInvalid.items.map(i=>({id:i.id,quantity:i.quantity})),beforeInvalid.items.map(i=>({id:i.id,quantity:i.quantity})));
+    assert.deepEqual(afterInvalid.coupons,beforeInvalid.coupons,'Invalid coupon not applied');
+    assert.deepEqual(afterInvalid.totals,beforeInvalid.totals,'Invalid coupon does not change totals');
+    phase='coupon';
+    await input.fill(coupon);
     await apply.click();
     const discounted=await waitCart(page,c=>c.coupons.some(x=>x.code===coupon),'Coupon applied');
     assert.equal(Number(discounted.totals.total_discount),5000*10**minor);
@@ -142,6 +157,17 @@ async function run(width) {
     await row.waitFor({state:'visible'});
     const persisted=await waitCart(page,c=>c.items.some(i=>i.id===id&&i.quantity===2)&&c.coupons.some(x=>x.code===coupon),'Cart survives reload');
     assert.equal(persisted.totals.total_price,discounted.totals.total_price);
+    phase='coupon-remove';
+    const couponSummary=page.locator('.wc-block-components-totals-discount').filter({hasText:coupon});
+    await couponSummary.getByRole('button',{name:/remove/i}).click();
+    const undiscounted=await waitCart(page,c=>c.coupons.length===0,'Coupon removed');
+    await couponSummary.getByRole('button',{name:/remove/i}).waitFor({state:'hidden'});
+    assert.deepEqual(undiscounted.items.map(i=>({id:i.id,quantity:i.quantity})),persisted.items.map(i=>({id:i.id,quantity:i.quantity})),'Removing coupon preserves cart');
+    assert.equal(Number(undiscounted.totals.total_discount),0);
+    assert.equal(undiscounted.totals.total_items,updated.totals.total_items);
+    assert.equal(undiscounted.totals.total_price,updated.totals.total_price,'Server total restored after removing coupon');
+    assert(await row.isVisible(),'Item remains visible after coupon removal');
+    assert.equal(await qty.inputValue(),'2');
     // WooCommerce switches the native CTA to a sticky container while its
     // reference is below the viewport, and hides that container on desktop.
     // Scroll the persistent outer wrapper (not the hidden link) into view,

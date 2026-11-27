@@ -57,6 +57,31 @@ foreach ([
     check($result->status===$reason && $result->candidateQuantity===null,'blocked '.$reason);
 }
 check($run(null,$obs(5,-300))->candidateQuantity===2,'inclusive freshness bound');
+$fractionalNow = new DateTimeImmutable('2026-01-01T00:05:00.500000Z');
+$fractional = static fn(int $quantity, string $time) => new StockObservation($id, $quantity, new DateTimeImmutable($time));
+$fractionalRun = static fn(?StockObservation $previous, StockObservation $incoming) =>
+    $preview->compare($id, $previous, $incoming, $policy, 0, $fractionalNow);
+$at = $fractional(5, '2026-01-01T00:05:00.500000Z');
+check($fractionalRun(null, $fractional(5, '2026-01-01T00:05:00.500001Z'))->status === 'future', 'fractional future blocked');
+check($fractionalRun(null, $fractional(5, '2026-01-01T00:00:00.500000Z'))->status === 'initial', 'fractional freshness inclusive');
+check($fractionalRun(null, $fractional(5, '2026-01-01T00:00:00.499999Z'))->status === 'stale', 'fractional stale blocked');
+check($fractionalRun($at, $fractional(5, '2026-01-01T00:05:00.499999Z'))->status === 'out_of_order', 'fractional ordering');
+check($fractionalRun($fractional(5, '2026-01-01T00:05:00.499999Z'), $at)->status === 'refresh', 'fractional refresh');
+check($fractionalRun($at, $fractional(6, '2026-01-01T01:05:00.500000+01:00'))->status === 'conflict', 'same instant across time zones conflicts');
+check($fractionalRun(null, $at)->observedAt === '2026-01-01T00:05:00.500000+00:00', 'timestamp preserves microseconds');
+$minTime = (new DateTimeImmutable())->setTimestamp(PHP_INT_MIN);
+$maxTime = (new DateTimeImmutable())->setTimestamp(PHP_INT_MAX);
+rejects(fn()=>new StockObservation($id, 5, $minTime), 'Unsupported inventory observation time');
+rejects(fn()=>new StockObservation($id, 5, $maxTime), 'Unsupported inventory observation time');
+rejects(fn()=>$preview->compare($id, null, $obs(5), $policy, 0, $minTime), 'Unsupported inventory observation time');
+rejects(fn()=>$preview->compare($id, null, $obs(5), $policy, 0, $maxTime), 'Unsupported inventory observation time');
+$dstNow = new DateTimeImmutable('2026-03-08T03:00:00.500000-04:00');
+$dstIncoming = $fractional(5, '2026-03-08T01:55:00.500000-05:00');
+check($preview->compare($id, null, $dstIncoming, $policy, 0, $dstNow)->status === 'initial', 'freshness is elapsed time across DST');
+$earliest = $fractional(5, '0001-01-01T00:00:00.000000+00:00');
+check($preview->compare($id, null, $earliest, $policy, 0, $earliest->observedAt)->status === 'initial', 'minimum supported UTC instant');
+$latest = $fractional(5, '9999-12-31T23:59:59.999999+00:00');
+check($preview->compare($id, null, $latest, $policy, 0, $latest->observedAt)->status === 'initial', 'maximum supported UTC instant');
 check($run(null,$obs(PHP_INT_MAX),PHP_INT_MAX)->candidateQuantity===0,'integer extremes safe');
 check($preview->compare($id,null,$obs(8),new InventoryPolicy(300,0,0),0,$now)->candidateQuantity===0,'zero cap');
 rejects(fn()=>$obs(-1),'Invalid stock observation');

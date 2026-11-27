@@ -79,7 +79,7 @@ class FixtureLauncher:
                     {"key": "bakata:run", "value": run},
                     {"key": "bakata:until", "value": str(until)}]
             result = self.ecs.run_task(cluster=c.cluster, taskDefinition=c.definition,
-                launchType="FARGATE", count=1, clientToken=token, startedBy=token[:32],
+                launchType="FARGATE", platformVersion="1.4.0", count=1, clientToken=token, startedBy=token[:32],
                 enableExecuteCommand=False,
                 networkConfiguration={"awsvpcConfiguration": {
                     "subnets": [c.subnet], "securityGroups": [c.security_group],

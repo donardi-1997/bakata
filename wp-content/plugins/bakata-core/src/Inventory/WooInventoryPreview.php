@@ -49,9 +49,12 @@ final class WooInventoryPreview
         $rawTime = $product->get_meta('_bakata_observed_at', true, 'edit');
         $quantity = is_string($rawQuantity) && preg_match('/\A(?:0|[1-9][0-9]*)\z/D', $rawQuantity)
             ? filter_var($rawQuantity, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]) : false;
-        $time = is_string($rawTime) && strlen($rawTime) === 25 && !str_contains($rawTime, "\0")
-            ? DateTimeImmutable::createFromFormat(DATE_ATOM, $rawTime) : false;
-        if ($quantity === false || $time === false || $time->format(DATE_ATOM) !== $rawTime) {
+        // Legacy second-precision timestamps are ambiguous, even when the
+        // original input happened to be exact; never invent the lost fraction.
+        $format = 'Y-m-d\TH:i:s.uP';
+        $time = is_string($rawTime) && strlen($rawTime) === 32 && !str_contains($rawTime, "\0")
+            ? DateTimeImmutable::createFromFormat('!' . $format, $rawTime) : false;
+        if ($quantity === false || $time === false || $time->format($format) !== $rawTime) {
             throw new RuntimeException('Invalid stored stock observation; manual review required.');
         }
         return (new InventoryPreview())->compare(

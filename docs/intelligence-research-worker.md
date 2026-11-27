@@ -10,7 +10,7 @@ El proceso exige DB vacía, instala WordPress, activa WooCommerce y Dropify endu
 
 ## Condiciones antes de activar un worker real
 
-- INT-18G: infraestructura declarativa ECS/Fargate, ECR, S3, DynamoDB e IAM; revisión de costos, red, cifrado, logs y ciclo de vida. Imágenes por digest, versiones revisadas de WordPress y WooCommerce. Los tags actuales de CI son móviles; no publicar esta imagen a ECR como runtime operativo.
+- INT-18G: infraestructura declarativa ECS/Fargate, ECR, S3, DynamoDB e IAM; revisión de costos, red, cifrado, logs y ciclo de vida. Imágenes por digest, versiones revisadas de WordPress y WooCommerce. Las bases WordPress del Dockerfile están fijadas por digest ([pins](intelligence-research-image-pins.md)), pero los plugins se ensamblan en CI desde ZIP y no forman una imagen revisada; no publicar esta imagen a ECR como runtime operativo.
 - INT-18H: reserva persistente condicional por tienda/run/página antes de cualquier llamada, independiente de la MariaDB efímera; reconciliación sin reintentos automáticos de incertidumbres; persistencia verificada de proyección en S3. Control de exclusión y cooldown entre tareas.
 - Secretos: autorización específica antes de mover un token de Dropify. No copiar la base de producción ni sus clientes, pedidos o opciones. Validar alcance del token y compatibilidad desde otra IP. Eliminar fixture de la futura imagen live y mantener el wrapper fail-closed sin autorización persistente.
 - Egress: en AWS, aislar de Lightsail y controlar tráfico saliente hacia el endpoint autorizado y servicios AWS estrictamente necesarios; no asumir que un security group filtra por dominio ni que localhost prueba aislamiento de red de AWS.

@@ -9,6 +9,9 @@ from unittest.mock import patch
 
 from intelligence.commercial import Capture
 from intelligence.normalization import ReviewedAttributes
+from intelligence.matching import ReviewedLink, approve_pair, compare
+from intelligence.normalization import normalize_product
+from intelligence.prices import Quote, ReviewedPriceContext, market_comparison
 from intelligence.scoring import CriterionReview, REVIEW_CRITERIA, UnitEconomics
 from intelligence.sources import SourceKind, SourceRegistry, SourceSpec
 from intelligence.storage import CommercialStore, APPLICATION_ID, SCHEMA_VERSION, MAX_DB_BYTES
@@ -139,6 +142,50 @@ class StorageTests(unittest.TestCase):
             self.store.record_equivalence("link-2",left,right,None,None,**kwargs)
         with self.assertRaises(ValueError):
             self.store.record_equivalence("link-3",left,right,a,b,**dict(kwargs,variant_equivalence_confirmed=False))
+
+    def test_review_reference_contract_across_approval_archive_and_market(self):
+        self.ingest(self.capture())
+        self.ingest(self.capture(1))
+        left, right = self.key(), self.key(1)
+        a = ReviewedAttributes(left, "gtin-a", gtin="036000291452")
+        b = ReviewedAttributes(right, "gtin-b", gtin="036000291452")
+        rows = self.store.observation(left), self.store.observation(right)
+        proposal = compare(normalize_product(rows[0], a), normalize_product(rows[1], b))
+        quotes = tuple(Quote(row, ReviewedPriceContext(
+            observation_key=row.key, evidence_ref="costs", destination="CO:bogota",
+            price_kind="retail", condition="new", tax_included=True,
+            additional_tax_minor=0, shipping_minor=0)) for row in rows)
+        options = dict(as_of=self.now, max_age=timedelta(days=1), max_skew=timedelta(0))
+        invalid = ("", " ", "\u034f", "\ufe0f", "\u2800", "\u3164",
+                   "revisión", "a b", "x" * 129, None)
+        for value in invalid:
+            with self.subTest(value=repr(value)):
+                with self.assertRaises(ValueError):
+                    approve_pair(proposal, value, variant_equivalence_confirmed=True)
+                with self.assertRaises(ValueError):
+                    ReviewedLink(left, right, value)
+                with self.assertRaises(ValueError):
+                    self.store.record_equivalence(
+                        "invalid", left, right, a, b, actor_ref="actor", review_ref=value,
+                        reviewed_at=self.now, now=self.now, variant_equivalence_confirmed=True)
+                # Defend the consuming boundary even if a caller bypasses frozen dataclass checks.
+                forged = ReviewedLink(left, right, "valid")
+                object.__setattr__(forged, "review_ref", value)
+                with self.assertRaises(ValueError):
+                    market_comparison(quotes, (forged,), **options)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM equivalences").fetchone()[0], 0)
+        for i, value in enumerate(("A", "A_z.9-", "x" * 128)):
+            with self.subTest(value=value):
+                link = approve_pair(proposal, value, variant_equivalence_confirmed=True)
+                self.assertEqual(market_comparison(quotes, (link,), **options).stats.count, 2)
+                review_id = f"valid-{i}"
+                self.assertTrue(self.store.record_equivalence(
+                    review_id, left, right, a, b, actor_ref="actor", review_ref=value,
+                    reviewed_at=self.now, now=self.now, variant_equivalence_confirmed=True))
+                saved = self.store.review("equivalence", review_id)["payload"]["link"]
+                restored = ReviewedLink(tuple(saved["left_key"]), tuple(saved["right_key"]), saved["review_ref"])
+                self.assertEqual(restored, link)
+                self.assertEqual(market_comparison(quotes, (restored,), **options).stats.count, 2)
 
     def test_foreign_key_and_review_payload_integrity(self):
         with self.assertRaises(sqlite3.IntegrityError):

@@ -1,0 +1,61 @@
+services:
+  db:
+    image: mariadb:11.4
+    labels: &ownership
+      bakata.receipt-race.owner: ${BAKATA_RACE_OWNER:?Set an ownership token}
+    environment:
+      MARIADB_DATABASE: bakata_receipt_race
+      MARIADB_USER: race
+      MARIADB_PASSWORD: synthetic_race_password
+      MARIADB_ROOT_PASSWORD: synthetic_root_password
+    volumes:
+      - race_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    networks: [isolated]
+  wordpress:
+    image: wordpress:php8.3-apache
+    labels: *ownership
+    environment: &wp_environment
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_NAME: bakata_receipt_race
+      WORDPRESS_DB_USER: race
+      WORDPRESS_DB_PASSWORD: synthetic_race_password
+    volumes:
+      - race_wp:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [isolated]
+  cli:
+    image: wordpress:cli-php8.3
+    labels: *ownership
+    user: "33:33"
+    working_dir: /var/www/html
+    environment:
+      <<: *wp_environment
+      HOME: /tmp
+      BAKATA_RECEIPT_RACE: "1"
+      BAKATA_RACE_MARKER: ${BAKATA_RACE_MARKER:?Set a fresh 64-character lowercase hex marker}
+    volumes:
+      - race_wp:/var/www/html
+      - ../wp-content/plugins/bakata-core:/var/www/html/wp-content/plugins/bakata-core:ro
+      - ./test-webhook-ledger-race.php:/tmp/receipt-race.php:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      wordpress:
+        condition: service_started
+    networks: [isolated]
+networks:
+  isolated:
+    internal: true
+    labels: *ownership
+volumes:
+  race_db:
+    labels: *ownership
+  race_wp:
+    labels: *ownership

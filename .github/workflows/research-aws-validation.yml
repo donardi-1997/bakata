@@ -4,7 +4,11 @@ on:
     branches: [main]
     paths:
       - 'infra/research-aws/**'
+      - 'infra/research-worker/Dockerfile'
+      - 'services/intelligence/Dockerfile'
       - 'scripts/test-research-aws-foundation.py'
+      - 'scripts/test-research-proxy-task.py'
+      - 'scripts/test-research-image-pins.py'
       - '.github/workflows/research-aws-validation.yml'
   workflow_dispatch:
 permissions:
@@ -19,8 +23,12 @@ jobs:
           persist-credentials: false
       - name: Test dormant infrastructure safety contract
         run: python3 scripts/test-research-aws-foundation.py -v
+      - name: Test dormant proxy task template and image pins
+        run: |
+          python3 scripts/test-research-proxy-task.py -v
+          python3 scripts/test-research-image-pins.py -v
       - name: Validate CloudFormation resource schemas
         run: |
           python3 -m venv /tmp/bk-cfn-lint
           /tmp/bk-cfn-lint/bin/pip install 'cfn-lint>=1.0,<2'
-          /tmp/bk-cfn-lint/bin/cfn-lint --regions us-east-1 --non-zero-exit-code error --template infra/research-aws/foundation.json
+          /tmp/bk-cfn-lint/bin/cfn-lint --regions us-east-1 --non-zero-exit-code error --template infra/research-aws/foundation.json infra/research-aws/proxy-task.json

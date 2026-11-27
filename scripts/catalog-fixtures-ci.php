@@ -12,6 +12,12 @@ $term = wp_insert_term('CI Category Alpha', 'product_cat', ['slug' => 'ci-catego
 if (is_wp_error($term)) {
     throw new RuntimeException($term->get_error_message());
 }
+$child = wp_insert_term('CI Category Child', 'product_cat', [
+    'slug' => 'ci-category-child', 'parent' => (int) $term['term_id'],
+]);
+if (is_wp_error($child)) {
+    throw new RuntimeException($child->get_error_message());
+}
 $collection = wp_insert_term('CI Editorial Collection', 'product_tag', ['slug' => 'hogar-en-armonia']);
 if (is_wp_error($collection)) {
     throw new RuntimeException($collection->get_error_message());
@@ -31,7 +37,9 @@ foreach ([
     $p->set_featured($featured);
     $p->set_regular_price('129900');
     $p->set_stock_status($stock);
-    $p->set_category_ids([(int) $term['term_id']]);
+    $p->set_category_ids($name === 'CI Featured Visible'
+        ? [(int) $term['term_id'], (int) $child['term_id']]
+        : [(int) $term['term_id']]);
     if ($name === 'CI Featured Visible') { $p->set_tag_ids([(int) $collection['term_id']]); }
     $p->save();
 }

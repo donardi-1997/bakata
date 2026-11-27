@@ -1,7 +1,8 @@
 """Versioned, explainable commercial screening; no automated listing or price writes."""
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import (Context, Decimal, DivisionByZero, InvalidOperation, Overflow,
+                     ROUND_HALF_EVEN, ROUND_HALF_UP, localcontext)
 from enum import Enum
 from types import MappingProxyType
 import re
@@ -15,6 +16,10 @@ WEIGHTS = MappingProxyType({
 })
 REVIEW_CRITERIA = tuple(k for k in WEIGHTS if k != "profitability")
 MAX_MINOR = 10**12
+# Explicit rather than inheriting the caller's precision, exponent bounds or traps.
+_SCORING_CONTEXT = Context(prec=28, rounding=ROUND_HALF_EVEN, Emin=-999999,
+                           Emax=999999, capitals=1, clamp=0,
+                           flags=[], traps=[InvalidOperation, DivisionByZero, Overflow])
 
 
 def _timestamp(value):
@@ -83,7 +88,8 @@ class UnitEconomics:
         contribution = self.contribution_minor
         if contribution is None:
             return None
-        return Decimal(contribution) * 100 / Decimal(self.sale_price_minor)
+        with localcontext(_SCORING_CONTEXT):
+            return Decimal(contribution) * 100 / Decimal(self.sale_price_minor)
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +150,13 @@ class ScoreResult:
 def evaluate(observation: Observation, economics: UnitEconomics | None,
              reviews: tuple[CriterionReview, ...], *, as_of: datetime,
              max_age: timedelta) -> ScoreResult:
+    with localcontext(_SCORING_CONTEXT):
+        return _evaluate(observation, economics, reviews, as_of=as_of, max_age=max_age)
+
+
+def _evaluate(observation: Observation, economics: UnitEconomics | None,
+              reviews: tuple[CriterionReview, ...], *, as_of: datetime,
+              max_age: timedelta) -> ScoreResult:
     as_of = _timestamp(as_of)
     if not isinstance(max_age, timedelta) or not timedelta(0) < max_age <= timedelta(days=30):
         raise ValueError("Specify freshness window of at most 30 days")
@@ -221,4 +234,4 @@ def rank_review_ready(results: tuple[ScoreResult, ...]) -> tuple[ScoreResult, ..
     if len({(r.rubric_version, r.as_of, r.max_age) for r in results}) > 1:
         raise ValueError("Rank only a common rubric, evaluation instant and freshness window")
     return tuple(sorted((r for r in results if r.status is ScreeningStatus.REVIEW_READY and r.total is not None),
-                        key=lambda r: (-r.total, r.observation_key)))
+                        key=lambda r: (r.total.copy_negate(), r.observation_key)))
