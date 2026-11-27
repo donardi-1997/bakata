@@ -10,6 +10,8 @@ COPY wp-config.php /opt/bakata/wp/wp-config.php
 COPY dropify-capture-page.php /opt/bakata/dropify-capture-page.php
 COPY run-fixture.sh /opt/bakata/run-fixture.sh
 RUN chmod 0555 /opt/bakata/run-fixture.sh && chmod -R a+rX /opt/bakata/wp
+RUN chmod 1777 /tmp
+VOLUME ["/tmp"]
 ENV HOME=/tmp WP_CLI_CACHE_DIR=/tmp/wp-cli-cache BAKATA_DROPIFY_SANDBOX=1
 USER 33:33
 ENTRYPOINT ["/bin/sh","/opt/bakata/run-fixture.sh"]

@@ -18,6 +18,7 @@ define('DISABLE_WP_CRON',true);
 define('DISALLOW_FILE_MODS',true);
 define('DISALLOW_FILE_EDIT',true);
 define('AUTOMATIC_UPDATER_DISABLED',true);
+define('WP_HTTP_BLOCK_EXTERNAL',true);
 define('WP_DEBUG',false);
 define('WP_DEBUG_DISPLAY',false);
 define('WP_DEBUG_LOG',false);
@@ -26,5 +27,5 @@ foreach (['AUTH_KEY','SECURE_AUTH_KEY','LOGGED_IN_KEY','NONCE_KEY',
     'AUTH_SALT','SECURE_AUTH_SALT','LOGGED_IN_SALT','NONCE_SALT'] as $key) {
     define($key,bin2hex(random_bytes(32)));
 }
-define('ABSPATH',__DIR__.'/');
+if (!defined('ABSPATH')) { define('ABSPATH',__DIR__.'/'); }
 require_once ABSPATH.'wp-settings.php';

@@ -51,7 +51,11 @@ test "$(docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' "$worker")" = t
 test "$(docker inspect --format '{{.HostConfig.Memory}}' "$worker")" = 805306368
 test -z "$(docker port "$db")"
 # The ephemeral DB is not a durable authorization ledger. Reusing it is denied.
-if timeout 30 docker run --rm "${common[@]}" "$image" >/dev/null 2>&1; then echo 'Expected nonempty database rejection'; exit 1; fi
+set +e
+timeout 30 docker run --rm "${common[@]}" "$image" >/dev/null 2>&1
+repeat_status=$?
+set -e
+test "$repeat_status" = 1
 PYTHONPATH="$repo/services/intelligence" python3 - "$temp/pages.jsonl" "$temp/catalog.sqlite" <<'PY'
 from datetime import datetime,timezone
 from pathlib import Path

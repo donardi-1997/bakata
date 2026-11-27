@@ -1,0 +1,754 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Bakata INT-18G: dormant research foundation, optional fixture-only private Fargate definition. No provider calls, schedules or services.",
+  "Parameters": {
+    "EnableFixtureNetwork": {
+      "Type": "String",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Default": "false",
+      "Description": "Opt-in to billable private endpoints and fixture task definition; never launches a task."
+    },
+    "WorkerImageDigest": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^sha256:[0-9a-f]{64}$",
+      "Description": "Reviewed fixture image already mirrored to stack worker ECR repository."
+    },
+    "DatabaseImageDigest": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^sha256:[0-9a-f]{64}$",
+      "Description": "Reviewed MariaDB image already mirrored to stack DB ECR repository."
+    }
+  },
+  "Rules": {
+    "ImagesRequired": {
+      "RuleCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "EnableFixtureNetwork"
+          },
+          "true"
+        ]
+      },
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::And": [
+              {
+                "Fn::Not": [
+                  {
+                    "Fn::Equals": [
+                      {
+                        "Ref": "WorkerImageDigest"
+                      },
+                      ""
+                    ]
+                  }
+                ]
+              },
+              {
+                "Fn::Not": [
+                  {
+                    "Fn::Equals": [
+                      {
+                        "Ref": "DatabaseImageDigest"
+                      },
+                      ""
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "Both reviewed image digests are required for fixture networking."
+        }
+      ]
+    }
+  },
+  "Conditions": {
+    "FixtureNetworkEnabled": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableFixtureNetwork"
+        },
+        "true"
+      ]
+    }
+  },
+  "Resources": {
+    "WorkerRepository": {
+      "Type": "AWS::ECR::Repository",
+      "Properties": {
+        "ImageTagMutability": "IMMUTABLE",
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true
+        },
+        "EncryptionConfiguration": {
+          "EncryptionType": "AES256"
+        },
+        "EmptyOnDelete": false
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "DatabaseRepository": {
+      "Type": "AWS::ECR::Repository",
+      "Properties": {
+        "ImageTagMutability": "IMMUTABLE",
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true
+        },
+        "EncryptionConfiguration": {
+          "EncryptionType": "AES256"
+        },
+        "EmptyOnDelete": false
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "EvidenceBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "AbortIncompleteUploads",
+              "Status": "Enabled",
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 7
+              }
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "EvidencePolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "EvidenceBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "EvidenceBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${EvidenceBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "CaptureLedger": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "pk",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "sk",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "pk",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "sk",
+            "KeyType": "RANGE"
+          }
+        ],
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "DeletionProtectionEnabled": true
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "ResearchCluster": {
+      "Type": "AWS::ECS::Cluster",
+      "Properties": {
+        "ClusterSettings": [
+          {
+            "Name": "containerInsights",
+            "Value": "disabled"
+          }
+        ]
+      }
+    },
+    "CoordinatorLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/${AWS::StackName}-coordinator"
+        },
+        "RetentionInDays": 14
+      }
+    },
+    "CoordinatorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "OwnLogsOnly",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-coordinator:log-stream:*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Coordinator": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-coordinator"
+        },
+        "Role": {
+          "Fn::GetAtt": [
+            "CoordinatorRole",
+            "Arn"
+          ]
+        },
+        "Runtime": "python3.12",
+        "Handler": "index.handler",
+        "Timeout": 5,
+        "MemorySize": 128,
+        "ReservedConcurrentExecutions": 0,
+        "Code": {
+          "ZipFile": "def handler(event, context):\n    return {'state': 'disabled', 'provider_queries': 0}\n"
+        }
+      },
+      "DependsOn": "CoordinatorLogs"
+    },
+    "ResearchVpc": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.211.0.0/24",
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true
+      },
+      "Condition": "FixtureNetworkEnabled"
+    },
+    "ResearchSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ResearchVpc"
+        },
+        "CidrBlock": "10.211.0.0/26",
+        "MapPublicIpOnLaunch": false
+      },
+      "Condition": "FixtureNetworkEnabled"
+    },
+    "ResearchRoutes": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ResearchVpc"
+        }
+      },
+      "Condition": "FixtureNetworkEnabled"
+    },
+    "SubnetRoutes": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "ResearchSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "ResearchRoutes"
+        }
+      },
+      "Condition": "FixtureNetworkEnabled"
+    },
+    "WorkerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Fixture task: no ingress, TLS egress in isolated VPC",
+        "VpcId": {
+          "Ref": "ResearchVpc"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      },
+      "Condition": "FixtureNetworkEnabled"
+    },
+    "EndpointSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Private AWS endpoints, fixture task only",
+        "VpcId": {
+          "Ref": "ResearchVpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "SourceSecurityGroupId": {
+              "Ref": "WorkerSecurityGroup"
+            }
+          }
+        ]
+      },
+      "Condition": "FixtureNetworkEnabled"
+    },
+    "S3Endpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ResearchVpc"
+        },
+        "VpcEndpointType": "Gateway",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+        },
+        "RouteTableIds": [
+          {
+            "Ref": "ResearchRoutes"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "s3:GetObject",
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:s3:::prod-${AWS::Region}-starport-layer-bucket/*"
+              }
+            }
+          ]
+        }
+      },
+      "Condition": "FixtureNetworkEnabled"
+    },
+    "WorkerLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "RetentionInDays": 7
+      },
+      "Condition": "FixtureNetworkEnabled"
+    },
+    "ExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "PullReviewedImagesAndOwnLogs",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "ecr:GetAuthorizationToken",
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "WorkerRepository",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "DatabaseRepository",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${WorkerLogs}:log-stream:*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "Condition": "FixtureNetworkEnabled"
+    },
+    "EcrApiEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ResearchVpc"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.ecr.api"
+        },
+        "SubnetIds": [
+          {
+            "Ref": "ResearchSubnet"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PrivateDnsEnabled": true
+      },
+      "Condition": "FixtureNetworkEnabled"
+    },
+    "EcrDockerEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ResearchVpc"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.ecr.dkr"
+        },
+        "SubnetIds": [
+          {
+            "Ref": "ResearchSubnet"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PrivateDnsEnabled": true
+      },
+      "Condition": "FixtureNetworkEnabled"
+    },
+    "LogsEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "ResearchVpc"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.logs"
+        },
+        "SubnetIds": [
+          {
+            "Ref": "ResearchSubnet"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PrivateDnsEnabled": true
+      },
+      "Condition": "FixtureNetworkEnabled"
+    },
+    "FixtureTask": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": {
+          "Fn::Sub": "${AWS::StackName}-fixture"
+        },
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
+        "NetworkMode": "awsvpc",
+        "Cpu": "1024",
+        "Memory": "2048",
+        "RuntimePlatform": {
+          "CpuArchitecture": "X86_64",
+          "OperatingSystemFamily": "LINUX"
+        },
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "ExecutionRole",
+            "Arn"
+          ]
+        },
+        "EphemeralStorage": {
+          "SizeInGiB": 21
+        },
+        "Volumes": [
+          {
+            "Name": "scratch"
+          },
+          {
+            "Name": "database"
+          }
+        ],
+        "ContainerDefinitions": [
+          {
+            "Name": "database",
+            "Image": {
+              "Fn::Sub": "${DatabaseRepository.RepositoryUri}@${DatabaseImageDigest}"
+            },
+            "Essential": true,
+            "Cpu": 256,
+            "Memory": 512,
+            "Environment": [
+              {
+                "Name": "MARIADB_DATABASE",
+                "Value": "fixture"
+              },
+              {
+                "Name": "MARIADB_USER",
+                "Value": "fixture"
+              },
+              {
+                "Name": "MARIADB_PASSWORD",
+                "Value": "ci-research-only"
+              },
+              {
+                "Name": "MARIADB_ROOT_PASSWORD",
+                "Value": "ci-research-root-only"
+              }
+            ],
+            "MountPoints": [
+              {
+                "SourceVolume": "database",
+                "ContainerPath": "/var/lib/mysql",
+                "ReadOnly": false
+              }
+            ],
+            "HealthCheck": {
+              "Command": [
+                "CMD-SHELL",
+                "healthcheck.sh --connect --innodb_initialized"
+              ],
+              "Interval": 10,
+              "Timeout": 5,
+              "Retries": 6,
+              "StartPeriod": 30
+            },
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "WorkerLogs"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
+                "awslogs-stream-prefix": "db"
+              }
+            }
+          },
+          {
+            "Name": "worker",
+            "Image": {
+              "Fn::Sub": "${WorkerRepository.RepositoryUri}@${WorkerImageDigest}"
+            },
+            "Essential": true,
+            "Cpu": 768,
+            "Memory": 768,
+            "User": "33:33",
+            "ReadonlyRootFilesystem": true,
+            "LinuxParameters": {
+              "Capabilities": {
+                "Drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "DependsOn": [
+              {
+                "ContainerName": "database",
+                "Condition": "HEALTHY"
+              }
+            ],
+            "Environment": [
+              {
+                "Name": "BAKATA_RESEARCH_FIXTURE",
+                "Value": "1"
+              }
+            ],
+            "MountPoints": [
+              {
+                "SourceVolume": "scratch",
+                "ContainerPath": "/tmp",
+                "ReadOnly": false
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "WorkerLogs"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
+                "awslogs-stream-prefix": "fixture"
+              }
+            }
+          }
+        ]
+      },
+      "Condition": "FixtureNetworkEnabled"
+    }
+  },
+  "Outputs": {
+    "WorkerRepositoryUri": {
+      "Value": {
+        "Fn::GetAtt": [
+          "WorkerRepository",
+          "RepositoryUri"
+        ]
+      }
+    },
+    "DatabaseRepositoryUri": {
+      "Value": {
+        "Fn::GetAtt": [
+          "DatabaseRepository",
+          "RepositoryUri"
+        ]
+      }
+    },
+    "EvidenceBucketName": {
+      "Value": {
+        "Ref": "EvidenceBucket"
+      }
+    },
+    "LedgerName": {
+      "Value": {
+        "Ref": "CaptureLedger"
+      }
+    },
+    "ClusterName": {
+      "Value": {
+        "Ref": "ResearchCluster"
+      }
+    },
+    "FixtureTaskArn": {
+      "Condition": "FixtureNetworkEnabled",
+      "Value": {
+        "Ref": "FixtureTask"
+      }
+    },
+    "FixtureSubnet": {
+      "Condition": "FixtureNetworkEnabled",
+      "Value": {
+        "Ref": "ResearchSubnet"
+      }
+    },
+    "FixtureSecurityGroup": {
+      "Condition": "FixtureNetworkEnabled",
+      "Value": {
+        "Ref": "WorkerSecurityGroup"
+      }
+    }
+  }
+}
