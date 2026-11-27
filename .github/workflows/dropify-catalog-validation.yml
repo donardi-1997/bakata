@@ -33,7 +33,12 @@ jobs:
           python3 scripts/verify-dropify.py /tmp/dropify-validation/original.zip
           python3 scripts/verify-dropify.py /tmp/dropify-validation/original.zip --catalog-only
           python3 scripts/harden-dropify.py /tmp/dropify-validation/original.zip /tmp/dropify-validation/dropify-catalog-validation.zip --catalog-only
-          sha256sum /tmp/dropify-validation/dropify-catalog-validation.zip > /tmp/dropify-validation/SHA256SUMS
+          (cd /tmp/dropify-validation && sha256sum dropify-catalog-validation.zip > SHA256SUMS)
+      - name: Rehearse verified directory replacement and rollback
+        run: |
+          python3 scripts/test-dropify-rollout-rehearsal.py
+          candidate_sha=$(cut -d ' ' -f 1 /tmp/dropify-validation/SHA256SUMS)
+          python3 scripts/dropify-rollout-rehearsal.py /tmp/dropify-validation/original.zip /tmp/dropify-validation/dropify-catalog-validation.zip --candidate-sha256 "$candidate_sha" | tee /tmp/dropify-validation/rollback-rehearsal.json
       - name: Install and test catalog-only package in isolated WordPress and WooCommerce
         run: |
           curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 90 --max-filesize 52428800 https://downloads.wordpress.org/plugin/woocommerce.latest-stable.zip -o /tmp/dropify-validation/woocommerce.zip
@@ -44,5 +49,6 @@ jobs:
           path: |
             /tmp/dropify-validation/dropify-catalog-validation.zip
             /tmp/dropify-validation/SHA256SUMS
+            /tmp/dropify-validation/rollback-rehearsal.json
           retention-days: 7
           if-no-files-found: error
