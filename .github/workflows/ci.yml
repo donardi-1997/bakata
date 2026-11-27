@@ -253,6 +253,16 @@ jobs:
           php -l scripts/test-intelligence-draft-ci.php
           export BAKATA_CI_INTELLIGENCE_SNAPSHOT="$(cat /tmp/bakata-job-result.json)"
           docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 -e BAKATA_CI_INTELLIGENCE_SNAPSHOT cli wp eval "$(tail -n +2 scripts/test-intelligence-draft-ci.php)"
+      - name: Intelligence approved draft — ledger to inert WooCommerce fixture
+        env:
+          BAKATA_CI_FIXTURES: '1'
+          PYTHONPATH: services/intelligence:services/intelligence/tests
+        run: |
+          export BAKATA_DRAFT_REVIEWER="$(docker compose run --rm -T cli wp user list --role=administrator --field=ID | head -n 1)"
+          export BAKATA_DRAFT_CATEGORY="$(docker compose run --rm -T cli wp term create product_cat 'CI Approved Draft Category' --slug=ci-approved-draft-category --porcelain)"
+          export BAKATA_CI_APPROVED_DRAFT="$(python3 scripts/fixture-approved-draft.py)"
+          php -l scripts/test-approved-draft-ci.php
+          docker compose run --rm -T -e BAKATA_CI_FIXTURES=1 -e BAKATA_CI_APPROVED_DRAFT cli wp eval "$(tail -n +2 scripts/test-approved-draft-ci.php)"
       - name: Intelligence Dropify — isolated read-only WooCommerce reconciliation
         env:
           BAKATA_CI_FIXTURES: '1'
