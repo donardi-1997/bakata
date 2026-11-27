@@ -1,0 +1,20 @@
+# INT-18 — Captura paginada controlada por el conector
+
+El exportador visible de Dropify original devuelve solo la página mostrada; no se usa para automatización. Esta implementación aprovecha el ProductsModel del ZIP catalog-only endurecido, conservando autorización y recibo único de cada página, TLS, timeout y respuesta proyectada. No usa otro endpoint ni una API nueva.
+
+**No ejecutar contra bakata.store, www.bakata.store ni dev.bakata.store.** Comparten instalación pública. El consumidor exige staging independiente (HTTPS; localhost solo fixture), WP-CLI, administrador, build catalog-only, autorización explícita en wp-config y tienda exacta. No instala el ZIP automáticamente. La configuración de staging y aprobación del operador siguen pendientes. El plugin original activo no es compatible; no ejecutar allí ni cargar credenciales en otro sistema sin autorización.
+
+## Configuración de staging (ejemplo, NO aplicar al servidor actual)
+
+Tras aprobar aislamiento y sustitución catalog-only, definir BAKATA_DROPIFY_BATCH_ENABLED=true, BAKATA_DROPIFY_BATCH_HOST con hostname exacto, BAKATA_DROPIFY_BATCH_RUN con ID único, BAKATA_DROPIFY_BATCH_STORE con ID local del token (no token), BAKATA_DROPIFY_BATCH_FIRST y BAKATA_DROPIFY_BATCH_LAST como enteros (1–100, hasta 10 páginas), BAKATA_DROPIFY_BATCH_UNTIL como epoch UTC entero, máximo 30 minutos futuro. No configurar simultáneamente constantes del piloto de una página. No copiar token a argumentos, logs o archivos de Intelligence.
+
+El wrapper ejecutable local de confianza invoca wp --user=ADMIN eval-file /ruta/scripts/dropify-capture-page.php "$@" sobre ese staging y ese sitio, sin parámetros de shell del catálogo. Python invoca el wrapper con RUN STORE PAGE, no credenciales. Requiere BridgeArchive existente, directorio padre privado y espacio suficiente.
+
+    cd services/intelligence
+    python3 -m intelligence.dropify_capture --workspace /privado/capture-RUN --db /privado/bridge.sqlite --wrapper /privado/capture-wrapper --run RUN --store ID --first 1 --last 10 --until EPOCH --operator REVISOR
+
+Hasta 100 filas proyectadas por autorización (10 consultas de 10); pausa 10s después de cada página, lock local por workspace, lock MariaDB durante llamada y control de intervalo por recibo anterior de proyección exitosa (10 filas completas). PHP reserva un recibo por run/página antes de contactar al proveedor. Python escribe un marcador duradero antes de llamar, almacena página proyectada con fsync y registra en BridgeArchive. Si se interrumpe luego de guardar página, la misma invocación recupera e ingiere localmente con digest idempotente. Si queda marcador sin página, se bloquea y requiere reconciliación; no se reintenta ni elimina recibo. No continuar si hay IDs superpuestos o desordenados. Primera página parcial/vacía detiene la ventana; no confirma fin real. Página llena devuelve siguiente página posible, no total. Nueva ventana requiere autorización; el límite de esquema de página 100 (hasta 1.000 filas potenciales) sigue vigente. No hay deduplicación global de ventanas; el archivo conserva observaciones por tienda, ID e instante y consulta latest deduplica identidades. Precios reportados no son costos verificados. No existe snapshot global del proveedor ni prueba de cobertura completa.
+
+Carpeta privada con datos proyectados, no respuestas completas ni tokens. No hay purga automática. Wrapper confiable, timeout local 35s; proceso remoto incierto puede terminar más tarde. Marcador y recibo previenen reintento, no prueban entrega. Locks/pausas no sustituyen límites autorizados del proveedor ni garantizan ritmo global entre instalaciones. No hay cron, API pública, publicación, importación ni despacho. Falta verificar offsets reales bajo autorización, aislamiento y revisión de límites operativos antes de ampliar alcance.
+
+CI: sandbox interno WordPress/WooCommerce con token sintético, fixture HTTP de 10+3 filas, rechazo de suscriptor y página anticipada, dos consultas, replay sin consultas, rechazo de duplicado y de continuación tras página parcial, archivo SQLite y ausencia de mutaciones comerciales. No prueba el comportamiento del proveedor real.
