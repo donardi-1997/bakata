@@ -2,6 +2,7 @@
 """Local root-only preflight. Never restores, reads credentials as text, boots WP or contacts Dropi."""
 import argparse
 import hashlib
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -113,14 +114,18 @@ def main():
     if args.backup.parent!=Path("/var/backups/bakata"):
         parser.error("Select an existing backup under the private dev backup directory")
     try:
-        private(args.backup.parent,True)
-        expected=reference(args.original)
-        backup=backup_status(args.backup,datetime.now(timezone.utc))
-        data=subprocess.run(["docker","compose","exec","-T","wordpress","php","-r",PHP],
-                            check=True,capture_output=True,timeout=30)
-        if len(data.stdout)>131072:
-            raise ValueError("Plugin inventory too large")
-        plugin=compare(expected,json.loads(data.stdout))
+        # Coordinate with the existing backup and deployment wrappers.
+        # No lockfile creation or mutation; refuse if it does not already exist.
+        with open("/run/lock/bakata-deploy.lock","rb") as lock:
+            fcntl.flock(lock,fcntl.LOCK_SH|fcntl.LOCK_NB)
+            private(args.backup.parent,True)
+            expected=reference(args.original)
+            backup=backup_status(args.backup,datetime.now(timezone.utc))
+            data=subprocess.run(["docker","compose","exec","-T","wordpress","php","-r",PHP],
+                                check=True,capture_output=True,timeout=30)
+            if len(data.stdout)>131072:
+                raise ValueError("Plugin inventory too large")
+            plugin=compare(expected,json.loads(data.stdout))
         print(json.dumps({"backup":backup,"plugin":plugin,"live_query_ready":False,
                           "next":"isolated-restore-and-authorization"},sort_keys=True))
     except (OSError,ValueError,KeyError,subprocess.SubprocessError):
