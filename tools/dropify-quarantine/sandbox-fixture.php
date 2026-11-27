@@ -38,7 +38,14 @@ if (get_option('bk_fixture_enabled') === '1') {
 if (get_option('bk_fixture_batch_enabled') === '1') {
     define('BAKATA_DROPIFY_BATCH_ENABLED',true);
     define('BAKATA_DROPIFY_BATCH_HOST','localhost');
-    define('BAKATA_DROPIFY_BATCH_RUN','ci-paged-capture');
+    $run='ci-paged-capture';
+    if (getenv('BAKATA_RESEARCH_PERSIST')==='1') {
+        $run=getenv('BAKATA_RESEARCH_RUN');
+        if (getenv('BAKATA_RESEARCH_FIXTURE')!=='1' || !is_string($run) || !preg_match('/\Afixture-[A-Za-z0-9_-]{1,56}\z/D',$run)) {
+            throw new RuntimeException('Invalid synthetic persistence identity.');
+        }
+    }
+    define('BAKATA_DROPIFY_BATCH_RUN',$run);
     define('BAKATA_DROPIFY_BATCH_STORE','7');
     define('BAKATA_DROPIFY_BATCH_FIRST',1);
     define('BAKATA_DROPIFY_BATCH_LAST',3);
@@ -58,7 +65,7 @@ add_filter('pre_http_request', static function ($pre, $args, $url) {
     update_option('bk_fixture_http_calls', (string)$count, false);
     if (get_option('bk_fixture_batch_enabled') === '1') {
         $body=json_decode($args['body']??'',true);
-        $approval='batch-'.hash('sha256','ci-paged-capture:'.$count);
+        $approval='batch-'.hash('sha256',BAKATA_DROPIFY_BATCH_RUN.':'.$count);
         $receipt='bk_dropify_catalog_'.hash('sha256',$approval);
         if (!defined('WP_CLI') || !WP_CLI || !in_array($count,[1,2],true)
             || get_option($receipt)===false || ($body['startData']??null)!==($count-1)*10
