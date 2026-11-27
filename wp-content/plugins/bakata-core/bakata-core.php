@@ -35,6 +35,17 @@ require_once __DIR__ . '/src/Intelligence/DropifyPreview.php';
 
 Intelligence\AdminPanel::register();
 
+// Export only visible catalog rows from the existing authenticated Dropify screen.
+// No connector methods, token lookup, HTTP requests or catalog changes.
+add_action('admin_enqueue_scripts', static function (): void {
+    $page = isset($_GET['page']) && is_string($_GET['page']) ? wp_unslash($_GET['page']) : '';
+    if ($page !== 'dropi-products' || !current_user_can('manage_options')) {
+        return;
+    }
+    wp_enqueue_script('bakata-dropify-visible-export',
+        plugins_url('assets/dropify-visible-export.js', __FILE__), [], '1.0.0', true);
+});
+
 add_action('before_woocommerce_init', static function (): void {
     if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
         \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility(
